@@ -1,0 +1,13 @@
+#!/bin/sh
+# Runs chroot(8)'d into the freshly-installed target system, after all
+# sets (including this site set) have been extracted. See
+# install.site(5) and the "Custom File Sets" section of
+# https://www.openbsd.org/faq/faq4.html.
+#
+# Keep this idempotent -- customize as the project grows.
+
+set -e
+
+rcctl enable sshd
+
+echo "install.site: custom provisioning complete" > /var/log/install.site.log

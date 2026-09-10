@@ -1,0 +1,33 @@
+# Example autoinstall(8) response file. Copy to install.conf and edit.
+#
+# Format: "<prompt text without the trailing ?> = <answer>", one per
+# line, matching the installer's interactive prompts verbatim. Wording
+# can shift between releases -- if autoinstall stalls on a question,
+# run the installer interactively once against your target release/ISO
+# and copy the exact prompt text it printed.
+#
+# Reference: https://man.openbsd.org/autoinstall.8
+
+System hostname = myhost
+Password for root = *************
+Change the default console to com0 = no
+Setup a user = puffy
+Password for user = *************
+Public ssh key for user = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@example.com
+What timezone are you in = UTC
+
+# This build embeds sets directly on the CD, so point the installer at
+# the CD-ROM rather than a network location.
+Location of sets = cdrom
+Set name(s) = +*
+Set name(s) = done
+
+# The custom SHA256 this project generates isn't signify(1)-signed, so
+# the installer will ask about that -- answer it here or autoinstall
+# will stop and wait for interactive input.
+Directory does not contain SHA256.sig. Continue without verification? = yes
+
+# Uncomment and adjust if you need a specific disk layout instead of
+# accepting the installer's default whole-disk partitioning:
+# Which disk is the root disk? = sd0
+# Use (W)hole disk MBR, whole disk (G)PT, or (E)dit? = whole
