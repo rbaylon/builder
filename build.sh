@@ -76,7 +76,12 @@ rm -rf "${WORK}"
 mkdir -p "${CDDIR}" "${OUT_DIR}"
 
 echo "==> Fetching official install media for ${RELEASE}/${ARCH}"
-ftp -o "${WORK}/install.iso" "${SRC}/install${RELEASE_SHORT}.iso"
+if [ -f "${BUILD_DIR}/install${RELEASE_SHORT}.iso" ]; then
+    cp -v ${BUILD_DIR}/install${RELEASE_SHORT}.iso "${WORK}/install.iso"
+else
+	ftp -o "${BUILD_DIR}/install${RELEASE_SHORT}.iso" "${SRC}/install${RELEASE_SHORT}.iso"
+	cp -v ${BUILD_DIR}/install${RELEASE_SHORT}.iso "${WORK}/install.iso"
+fi
 
 echo "==> Extracting install.iso"
 vnconfig vnd1 "${WORK}/install.iso"

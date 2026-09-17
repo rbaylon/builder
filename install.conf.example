@@ -14,7 +14,7 @@ Change the default console to com0 = no
 Setup a user = puffy
 Password for user = *************
 Public ssh key for user = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@example.com
-What timezone are you in = UTC
+What timezone are you in = Asia/Manila
 
 # This build embeds sets directly on the CD, so point the installer at
 # the CD-ROM rather than a network location.
