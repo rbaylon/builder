@@ -1,4 +1,5 @@
 /out/
+/build/
 /config.local.sh
 /install.conf
 *.iso

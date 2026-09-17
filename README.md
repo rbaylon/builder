@@ -28,26 +28,23 @@ See [CLAUDE.md](CLAUDE.md) for the full architecture writeup.
 ## Requirements
 
 Building requires native OpenBSD tools (`rdsetroot`, `vnconfig`,
-`mkhybrid`) that only exist on OpenBSD -- it cannot run on Windows
-directly. This project drives a **remote OpenBSD host** over SSH to do
-the actual build.
+`mkhybrid`) that only exist on OpenBSD, so `build.sh` must be run
+**directly on an OpenBSD host, as root**.
 
 ## Quick start
 
-1. `cp config.local.sh.example config.local.sh` and fill in your
-   OpenBSD build host (`REMOTE_HOST`, `REMOTE_USER`, etc.).
-2. `cp install.conf.example install.conf` and edit it (hostname, SSH
+1. `cp install.conf.example install.conf` and edit it (hostname, SSH
    key, timezone, ...).
-3. Add whatever files/scripts you want under `site/` (remember: it
+2. Add whatever files/scripts you want under `site/` (remember: it
    mirrors the target's root filesystem).
-4. `./build.sh` -- uploads `site/` and `install.conf` to the build
-   host, runs the remote build, and copies the resulting ISO into
-   `out/`.
+3. `doas ./build.sh` -- fetches the official install ISO, builds
+   `site79.tgz`, embeds `install.conf` into `bsd.rd`, repacks the ISO,
+   and drops the result into `out/`.
 
 ## Status
 
-`remote/build-image.sh` encodes the documented community approach for
-this (see sources in the script's header comment) but has not yet been
-validated end-to-end against a real build host. First run: boot the
-resulting ISO in a VM and confirm autoinstall actually fires before
-trusting it further.
+`build.sh` encodes the documented community approach for this (see
+sources in the script's header comment) but has not yet been validated
+end-to-end on a real OpenBSD host. First run: boot the resulting ISO
+in a VM and confirm autoinstall actually fires before trusting it
+further.

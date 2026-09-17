@@ -20,30 +20,27 @@ Windows/Linux equivalent: `rdsetroot(8)` (patches the ramdisk kernel
 `bsd.rd`), `vnconfig(8)` + `mount` (to edit the ramdisk FFS image and
 to read the source ISO's cd9660 filesystem), and `mkhybrid` (rebuilds
 the hybrid BIOS+EFI bootable ISO). There is no cross-build path from
-Windows.
+other OSes.
 
-Because of this, the workflow is split in two:
-- **Local driver** (`build.sh`) runs anywhere with bash/ssh/scp (git-bash
-  or WSL on Windows) and just orchestrates.
-- **Remote build script** (`remote/build-image.sh`) runs as root on a
-  remote OpenBSD host over SSH and does the actual work.
+`build.sh` is therefore a single POSIX `/bin/sh` script that runs
+**directly on an OpenBSD host, as root** (e.g. via `doas ./build.sh`)
+and does the entire fetch/patch/repack pipeline itself -- there is no
+separate remote driver or SSH hop.
 
-Never try to run `rdsetroot`/`vnconfig`/`mkhybrid` locally on this
-Windows machine -- they don't exist here. Any change to the build logic
-belongs in `remote/build-image.sh`, and needs to be validated by
-actually running it against an OpenBSD host, not just read for
-plausibility.
+Never try to run `rdsetroot`/`vnconfig`/`mkhybrid` on a non-OpenBSD
+machine -- they don't exist there. Any change to the build logic
+belongs in `build.sh`, and needs to be validated by actually running it
+on an OpenBSD host, not just read for plausibility.
 
 ## Commands
 
 ```sh
 # One-time setup
-cp config.local.sh.example config.local.sh   # fill in REMOTE_HOST etc.
-cp install.conf.example install.conf         # edit hostname/ssh key/timezone
+cp install.conf.example install.conf   # edit hostname/ssh key/timezone
 
-# Build (uploads site/ + install.conf to the remote host, builds there,
-# copies the ISO back to out/)
-./build.sh
+# Build (fetches the install ISO, embeds site/ + install.conf, repacks
+# it, and writes the result to out/)
+doas ./build.sh
 ```
 
 There is no lint/test suite -- correctness is verified by booting the
@@ -61,7 +58,7 @@ install.conf           -> answers to installer prompts (autoinstall(8)),
                           via rdsetroot, so (A)utoinstall needs no DHCP/HTTP
 ```
 
-`remote/build-image.sh` does, in order:
+`build.sh` does, in order, all on the local OpenBSD host:
 1. Fetch the official `install${RELEASE_SHORT}.iso` for
    `RELEASE`/`ARCH` from `MIRROR`.
 2. Mount it (`vnconfig` + `mount -t cd9660`) and copy its contents out
@@ -77,11 +74,11 @@ install.conf           -> answers to installer prompts (autoinstall(8)),
 6. Repack everything with `mkhybrid`, using the same flags as
    OpenBSD's own `distrib/${ARCH}/iso/Makefile`.
 
-Config layering: `config.sh` (committed defaults: release/arch/mirror)
-is sourced first, then `config.local.sh` (gitignored: `REMOTE_HOST` and
-friends) overrides it. `install.conf` is also gitignored by default
-since it may end up carrying host-specific or sensitive answers --
-`install.conf.example` is the tracked template.
+Config layering: `config.sh` (committed defaults: release/arch/mirror/
+build & output dirs) is sourced first, then `config.local.sh`
+(gitignored, optional) overrides it if present. `install.conf` is also
+gitignored by default since it may end up carrying host-specific or
+sensitive answers -- `install.conf.example` is the tracked template.
 
 ## Key references
 
@@ -98,11 +95,11 @@ since it may end up carrying host-specific or sensitive answers --
 
 ## Known gaps / things to verify before trusting a build
 
-- `remote/build-image.sh` has not been run end-to-end against a real
-  OpenBSD host yet -- it's a documented first draft, not a tested
-  pipeline. See the script's header comment for the specific risk
-  points (device name collisions on `vnd1`, whether `mkhybrid` is on
-  `PATH`, `rdsetroot`'s fixed reserved-space budget in `bsd.rd`).
+- `build.sh` has not been run end-to-end against a real OpenBSD host
+  yet -- it's a documented first draft, not a tested pipeline. See the
+  script's header comment for the specific risk points (device name
+  collisions on `vnd1`, whether `mkhybrid` is on `PATH`, `rdsetroot`'s
+  fixed reserved-space budget in `bsd.rd`).
 - Exact installer prompt wording in `install.conf` can drift between
   OpenBSD releases -- if autoinstall stalls, it's waiting on a prompt
   whose text doesn't match; run the installer interactively once
