@@ -74,6 +74,7 @@ SITEDIR="${REPO_DIR}/site"
 
 rm -rf "${WORK}"
 mkdir -p "${CDDIR}" "${OUT_DIR}"
+vnconfig -u vnd1
 
 echo "==> Fetching official install media for ${RELEASE}/${ARCH}"
 if [ -f "${BUILD_DIR}/install${RELEASE_SHORT}.iso" ]; then
