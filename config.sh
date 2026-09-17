@@ -8,5 +8,5 @@ RELEASE_SHORT="79"
 ARCH="amd64"
 MIRROR="https://cdn.openbsd.org/pub/OpenBSD"
 
-BUILD_DIR="${BUILD_DIR:-./build}"
-OUT_DIR="${OUT_DIR:-./out}"
+BUILD_DIR="/usr/obj/arkgate/build"
+OUT_DIR="/usr/obj/arkgate/out"
