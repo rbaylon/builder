@@ -64,13 +64,20 @@ install.conf           -> answers to installer prompts (autoinstall(8)),
 2. Mount it (`vnconfig` + `mount -t cd9660`) and copy its contents out
    with `pax`.
 3. Tar `site/` into `site${RELEASE_SHORT}.tgz`, dropped next to the
-   standard sets in `<RELEASE_SHORT>/<ARCH>/` on the extracted tree.
+   standard sets in `<RELEASE>/<ARCH>/` on the extracted tree (the ISO's
+   on-disc directory uses the full release string, e.g. `7.9/amd64`,
+   not the short form used for filenames like `install79.iso`).
 4. Regenerate `SHA256` for that set directory (unsigned -- there's no
    `signify` key for this custom build, so `install.conf` must answer
    "yes" to the resulting "continue without verification?" prompt).
-5. Extract `bsd.rd`'s ramdisk image with `rdsetroot -x`, mount it,
-   drop in `install.conf` as `/auto_install.conf`, unmount, and write
-   it back with `rdsetroot`.
+5. `bsd.rd` ships gzip-compressed on the install media (the bootloader
+   inflates it at boot); gunzip it, extract its ramdisk image with
+   `rdsetroot -x`, mount it, drop in `install.conf` as
+   `/auto_install.conf`, unmount, write it back with `rdsetroot`, then
+   re-gzip it back to `bsd.rd`. (`bsd`/`bsd.mp` are plain ELF, not
+   compressed -- only `bsd.rd` needs this.) SHA256 is regenerated
+   *after* this step, not before, since it must hash the final patched
+   `bsd.rd`.
 6. Repack everything with `mkhybrid`, using the same flags as
    OpenBSD's own `distrib/${ARCH}/iso/Makefile`.
 
@@ -95,12 +102,23 @@ sensitive answers -- `install.conf.example` is the tracked template.
 
 ## Known gaps / things to verify before trusting a build
 
-- `build.sh` has not been run end-to-end against a real OpenBSD host
-  yet -- it's a documented first draft, not a tested pipeline. See the
-  script's header comment for the specific risk points (device name
-  collisions on `vnd1`, whether `mkhybrid` is on `PATH`, `rdsetroot`'s
-  fixed reserved-space budget in `bsd.rd`).
-- Exact installer prompt wording in `install.conf` can drift between
-  OpenBSD releases -- if autoinstall stalls, it's waiting on a prompt
-  whose text doesn't match; run the installer interactively once
-  against the target release to get exact wording.
+- `build.sh` has been run end-to-end on a real OpenBSD 7.9/amd64 host
+  and produces a structurally correct ISO: `site79.tgz` is present
+  next to the standard sets, `bsd.rd` is validly re-gzipped, `SHA256`
+  matches the final (patched) files, and the embedded
+  `auto_install.conf` is byte-identical to the source `install.conf`.
+  Bugs found and fixed during that run: the on-disc set directory uses
+  the full release string (`7.9/amd64`), not `RELEASE_SHORT`
+  (`79/amd64`); `pax -rw` with an absolute source path embeds the full
+  path into the destination -- must `cd` into the source dir first;
+  `bsd.rd` is gzip-compressed on the media and must be gunzipped
+  before `rdsetroot -x` and re-gzipped afterward; `mkhybrid -V` (ISO9660
+  Volume ID) is capped at 32 characters; and a fresh `${BUILD_DIR}`
+  needs its leftover mounts/`vnd1` cleared before `rm -rf`, in case a
+  previous run was interrupted mid-mount.
+- **Not yet validated:** actually booting the resulting ISO and
+  confirming `(A)utoinstall` completes unattended. Exact installer
+  prompt wording in `install.conf` can drift between OpenBSD releases
+  -- if autoinstall stalls, it's waiting on a prompt whose text doesn't
+  match; run the installer interactively once against the target
+  release to get exact wording.

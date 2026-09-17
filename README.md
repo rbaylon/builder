@@ -43,8 +43,7 @@ Building requires native OpenBSD tools (`rdsetroot`, `vnconfig`,
 
 ## Status
 
-`build.sh` encodes the documented community approach for this (see
-sources in the script's header comment) but has not yet been validated
-end-to-end on a real OpenBSD host. First run: boot the resulting ISO
-in a VM and confirm autoinstall actually fires before trusting it
-further.
+`build.sh` has been run end-to-end on a real OpenBSD 7.9/amd64 host
+and produces a structurally correct ISO. Not yet validated: actually
+booting the resulting ISO and confirming autoinstall fires and
+completes unattended -- do that before trusting a build fully.
