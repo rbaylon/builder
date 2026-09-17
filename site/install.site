@@ -8,7 +8,7 @@
 
 set -e
 logfile=/var/log/install.site.log
-chmod 755 /usr/local/bin/setup_arkgate.sh
+echo "chmod 755 /usr/local/bin/setup_arkgate.sh" >> /etc/rc.firsttime
 echo "/usr/local/bin/setup_arkgate.sh" >> /etc/rc.firsttime
 echo "install.site: custom provisioning complete" >> $logfile
 
