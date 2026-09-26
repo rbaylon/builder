@@ -60,7 +60,7 @@ build() {
 	src_base=~/go/src/github.com/rbaylon
 	dist_dir=/usr/local/arkgate
 	rm -rf $dist_dir/*
-	rm -rf $buildir_dir/*
+	rm -rf $buildir_dir/site/usr/local/arkgate/*
 	for app in arkgated srvcman srvcmanui billportal captiveportal
 	do
 		echo "building $app"
