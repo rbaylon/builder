@@ -48,7 +48,33 @@
 #     short if RELEASE/ARCH strings grow.
 
 set -e
+
+build_app() {
+	cd $1
+	git pull
+	make dist
+}
+
+build() {
+	buildir_dir=$1
+	src_base=~/go/src/github.com/rbaylon
+	dist_dir=/usr/local/arkgate
+	rm -rf $dist_dir/*
+	rm -rf $buildir_dir/*
+	for app in arkgated srvcman srvcmanui billportal captiveportal
+	do
+		echo "building $app"
+		build_app ${src_base}/${app}
+		echo "done building $app"
+		echo "Moving $app bin files to site dir"
+		tar -C $buildir_dir -xzvf $dist_dir/${app}.tar.gz
+		echo "Done moving $app files to site dir" 
+	done
+}
+
 cd "$(dirname "$0")"
+
+build `pwd`
 
 . ./config.sh
 if [ -f ./config.local.sh ]; then

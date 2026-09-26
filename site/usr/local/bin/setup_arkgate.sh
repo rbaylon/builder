@@ -24,5 +24,8 @@ cd /dev/
 ./MAKEDEV pppac7
 echo "done" >> $logfile
 
+echo "Installing golang..." >> $logfile
+pkg_add go
+echo "Done" >> $logfile
 echo "install.site: custom provisioning complete" >> $logfile
 
