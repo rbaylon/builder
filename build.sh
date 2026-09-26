@@ -48,9 +48,10 @@
 #     short if RELEASE/ARCH strings grow.
 
 set -e
-cd "$(dirname "$0")"
+build_dir="$(dirname "$0")"
+cd $build_dir
 
-build `pwd`
+su - admin -c sh ${build_dir}/buildapps.sh $build_dir
 
 . ./config.sh
 if [ -f ./config.local.sh ]; then
