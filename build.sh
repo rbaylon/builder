@@ -67,7 +67,11 @@ build() {
 		build_app ${src_base}/${app}
 		echo "done building $app"
 		echo "Moving $app bin files to site dir"
-		tar -C $buildir_dir -xzvf $dist_dir/${app}.tar.gz
+		if [ "${app}" = "subsportal" ];then
+			tar -C $buildir_dir -xzvf $dist_dir/captiveportal.tar.gz
+		else
+			tar -C $buildir_dir -xzvf $dist_dir/${app}.tar.gz
+		fi
 		echo "Done moving $app files to site dir" 
 	done
 }
