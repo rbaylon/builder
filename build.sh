@@ -74,6 +74,7 @@ build() {
 		fi
 		echo "Done moving $app files to site dir" 
 	done
+	cd $buildir_dir
 }
 
 cd "$(dirname "$0")"
