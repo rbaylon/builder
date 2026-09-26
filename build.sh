@@ -61,7 +61,7 @@ build() {
 	dist_dir=/usr/local/arkgate
 	rm -rf $dist_dir/*
 	rm -rf $buildir_dir/site/usr/local/arkgate/*
-	for app in arkgated srvcman srvcmanui billportal captiveportal
+	for app in arkgated srvcman srvcmanui billportal subsportal
 	do
 		echo "building $app"
 		build_app ${src_base}/${app}
