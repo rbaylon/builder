@@ -25,5 +25,20 @@ pkg_add go
 echo "Done" >> $logfile
 echo "pfctl -f /etc/pf.conf" >> /etc/rc.local
 echo "rm -f /var/arkgated.sock" >> /etc/rc.local
+
+echo "Setting up console menu login shell for admin..." >> $logfile
+menu=/usr/local/bin/console-menu
+chmod 755 $menu
+grep -qxF $menu /etc/shells || echo $menu >> /etc/shells
+cat >> /etc/doas.conf <<EOF
+permit nopass :arkgate cmd pfctl args -si
+permit nopass :arkgate cmd pfctl args -f /etc/pf.conf
+permit nopass :arkgate cmd reboot
+permit nopass :arkgate cmd halt args -p
+EOF
+doas -C /etc/doas.conf
+usermod -s $menu admin
+echo "Done" >> $logfile
 echo "install.site: custom provisioning complete" >> $logfile
+reboot
 

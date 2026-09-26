@@ -1,0 +1,96 @@
+#!/bin/sh
+# Menu-driven restricted login shell, modeled on the OPNsense console
+# menu: the user can only pick one of the listed options; nothing typed
+# at the prompt is ever evaluated as a command.
+#
+# Wired up as admin's login shell by setup_arkgate.sh (/etc/shells,
+# chmod, usermod -s, and the doas(1) rules the privileged options need).
+
+trap '' INT QUIT TSTP
+
+pause() {
+	printf '\nPress Enter to continue...'
+	read -r _ || exit 0
+}
+
+confirm() {
+	printf '%s [y/N]: ' "$1"
+	read -r ans || exit 0
+	[ "$ans" = "y" ] || [ "$ans" = "Y" ]
+}
+
+while :; do
+	clear
+	cat <<EOF
+
+  $(hostname)  --  $(uname -sr)
+
+   1) Show network interfaces
+   2) Show routing table
+   3) Ping a host
+   4) Show firewall (pf) status
+   5) Reload firewall (pf) rules
+   6) Reboot system
+   7) Halt system
+   8) Change your password
+   0) Log out
+
+EOF
+	printf 'Enter an option: '
+	read -r choice || exit 0
+
+	case "$choice" in
+	1)
+		ifconfig
+		pause
+		;;
+	2)
+		route -n show
+		pause
+		;;
+	3)
+		printf 'Host or IP to ping: '
+		read -r host || exit 0
+		case "$host" in
+		'' | -* | *[!A-Za-z0-9.:-]*)
+			echo "Invalid host."
+			;;
+		*)
+			ping -c 3 "$host"
+			;;
+		esac
+		pause
+		;;
+	4)
+		doas pfctl -si
+		pause
+		;;
+	5)
+		if confirm "Reload /etc/pf.conf?"; then
+			doas pfctl -f /etc/pf.conf
+		fi
+		pause
+		;;
+	6)
+		if confirm "Reboot the system?"; then
+			doas reboot
+		fi
+		;;
+	7)
+		if confirm "Halt the system?"; then
+			doas halt -p
+		fi
+		;;
+	8)
+		passwd
+		pause
+		;;
+	0)
+		exit 0
+		;;
+	*)
+		echo "Invalid option."
+		pause
+		;;
+	esac
+done
