@@ -39,6 +39,7 @@ EOF
 doas -C /etc/doas.conf
 usermod -s $menu admin
 echo "Done" >> $logfile
+chown -R admin:admin /usr/local/arkgate
 echo "install.site: custom provisioning complete" >> $logfile
 reboot
 
