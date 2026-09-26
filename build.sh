@@ -56,6 +56,7 @@ build_app() {
 }
 
 build() {
+	su - admin
 	buildir_dir=$1
 	src_base=~/go/src/github.com/rbaylon
 	dist_dir=/usr/local/arkgate
@@ -74,7 +75,7 @@ build() {
 		fi
 		echo "Done moving $app files to site dir" 
 	done
-	cd $buildir_dir
+	exit
 }
 
 cd "$(dirname "$0")"
