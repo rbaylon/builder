@@ -4,13 +4,9 @@ set -e
 logfile=/var/log/install.site.log
 rcctl enable sshd
 
-passwd=admin12345
 echo "creating arkgate group" > $logfile
 groupadd arkgate
-echo "done" >> $logfile
-
-echo "Creating admin user..." >> $logfile
-adduser -batch admin arkgate $passwd -unencrypted
+usermod -G arkgate admin
 echo "done" >> $logfile
 
 echo "Making pppacX devices..." >> $logfile
@@ -27,5 +23,7 @@ echo "done" >> $logfile
 echo "Installing golang..." >> $logfile
 pkg_add go
 echo "Done" >> $logfile
+echo "pfctl -f /etc/pf.conf" >> /etc/rc.local
+echo "rm -f /var/arkgated.sock" >> /etc/rc.local
 echo "install.site: custom provisioning complete" >> $logfile
 
