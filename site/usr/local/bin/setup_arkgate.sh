@@ -41,10 +41,14 @@ usermod -s $menu admin
 echo "Done" >> $logfile
 chown -R admin:admin /usr/local/arkgate
 mkdir -p /usr/local/arkgate/ssl/private
-openssl req -x509 -newkey ec:<(openssl ecparam -name prime256v1) -keyout /usr/local/arkgate/ssl/private/key.pem -out /usr/loca/arkgate/ssl/cert.pem -days 365 -nodes -subj '/CN=arkgate.local'
+openssl ecparam -name prime256v1 -genkey -noout -out /usr/local/arkgate/ssl/private/key.pem
+openssl req -x509 -new -key /usr/local/arkgate/ssl/private/key.pem -out /usr/local/arkgate/ssl/cert.pem -days 365 -subj '/CN=arkgate.local'
 chmod -R 400 /usr/local/arkgate/ssl/private
 mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.orig
 mv /usr/local/arkgate/nginx.conf /etc/nginx/
+rcctl enable nginx
+mv /usr/local/arkgate/httpd.conf /etc/
+rcctl enable httpd
 echo "install.site: custom provisioning complete" >> $logfile
 reboot
 
