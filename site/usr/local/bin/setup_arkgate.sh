@@ -21,7 +21,7 @@ cd /dev/
 echo "done" >> $logfile
 
 echo "Installing golang..." >> $logfile
-pkg_add go snmp_exporter nginx
+pkg_add go snmp_exporter
 echo "Done" >> $logfile
 echo "pfctl -f /etc/pf.conf" >> /etc/rc.local
 echo "rm -f /var/arkgated.sock" >> /etc/rc.local
@@ -40,13 +40,14 @@ doas -C /etc/doas.conf
 usermod -s $menu admin
 echo "Done" >> $logfile
 chown -R admin:admin /usr/local/arkgate
-mkdir -p /usr/local/arkgate/ssl/private
-openssl ecparam -name prime256v1 -genkey -noout -out /usr/local/arkgate/ssl/private/key.pem
-openssl req -x509 -new -key /usr/local/arkgate/ssl/private/key.pem -out /usr/local/arkgate/ssl/cert.pem -days 365 -subj '/CN=arkgate.local'
-chmod -R 400 /usr/local/arkgate/ssl/private
-mv /etc/nginx/nginx.conf /etc/nginx/nginx.conf.orig
-mv /usr/local/arkgate/nginx.conf /etc/nginx/
-rcctl enable nginx
+# relayd's "tls keypair arkgate.local" only ever looks in /etc/ssl (see
+# relayd.conf's header comment) and this relayd build can only load an
+# RSA key, not the EC key nginx would have been fine with.
+mkdir -p /etc/ssl/private
+openssl req -x509 -newkey rsa:2048 -keyout /etc/ssl/private/arkgate.local.key -out /etc/ssl/arkgate.local.crt -days 365 -nodes -subj '/CN=arkgate.local'
+chmod 600 /etc/ssl/private/arkgate.local.key
+mv /usr/local/arkgate/relayd.conf /etc/
+rcctl enable relayd
 mv /usr/local/arkgate/httpd.conf /etc/
 rcctl enable httpd
 echo "install.site: custom provisioning complete" >> $logfile
