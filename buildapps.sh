@@ -17,10 +17,13 @@ do
     build_app ${src_base}/${app}
     echo "done building $app"
     echo "Moving $app bin files to site dir"
+    cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/${app}/
     if [ "${app}" = "subsportal" ];then
-        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf $dist_dir/captiveportal.tar.gz
+        cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/captiveportal/
+        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/captiveportal.tar.gz
     else
-        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf $dist_dir/${app}.tar.gz
+        cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/${app}/
+        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/${app}.tar.gz
     fi
     echo "Done moving $app files to site dir" 
 done
