@@ -19,10 +19,10 @@ do
     echo "Moving $app bin files to site dir"
     cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/${app}/
     if [ "${app}" = "subsportal" ];then
-        cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/captiveportal/
+        cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/captiveportal/.env
         tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/captiveportal.tar.gz
     else
-        cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/${app}/
+        cp -v /usr/local/arkgate_templates/*.${app} ${dist_dir}/${app}/.env
         tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/${app}.tar.gz
     fi
     echo "Done moving $app files to site dir" 

@@ -48,7 +48,7 @@
 #     short if RELEASE/ARCH strings grow.
 
 set -e
-build_dir="$(dirname "$0")"
+build_dir=`pwd`
 cd $build_dir
 
 su - admin -c sh ${build_dir}/buildapps.sh $build_dir
