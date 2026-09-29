@@ -3,4 +3,4 @@ srvcurl=http://127.0.0.1:44444/api/v1/
 rundir=/usr/local/arkgate/arkgated/rundir/
 socketfile=/var/arkgated.sock
 arkgid=1001
-creds=YXJrZ2F0ZTphZG1pbjEyMzQ1
+creds=appcreds
