@@ -134,6 +134,7 @@ echo "==> Refreshing SHA256 for the set directory"
 rm -f "${SETDIR}/SHA256.sig"
 
 echo "==> Repacking ISO with mkhybrid"
+now=`date '+%Y%m%d%H%M'`
 mkhybrid -a -R -T -L -l -d -D -N \
 	-o "${OUT_DIR}/install${RELEASE_SHORT}-custom.iso" \
 	-A "OpenBSD ${RELEASE} ${ARCH} Custom Install CD" \
@@ -142,4 +143,4 @@ mkhybrid -a -R -T -L -l -d -D -N \
 	-e "${RELEASE}/${ARCH}/eficdboot" \
 	"${CDDIR}"
 
-echo "==> Done: ${OUT_DIR}/install${RELEASE_SHORT}-custom.iso"
+echo "==> Done: ${OUT_DIR}/specz-os-${RELEASE_SHORT}-${now}-.iso"
