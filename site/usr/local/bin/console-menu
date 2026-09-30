@@ -23,16 +23,17 @@ while :; do
 	clear
 	cat <<EOF
 
-  $(hostname)  --  $(uname -sr)
+	ARKGATE  --  Internet Service Provider OS
 
    1) Show network interfaces
    2) Show routing table
    3) Ping a host
-   4) Show firewall (pf) status
-   5) Reload firewall (pf) rules
+   4) Traceroute
+   5) Reload firewall rules
    6) Reboot system
    7) Halt system
    8) Change your password
+   9) Reset Web Admin Credentials
    0) Log out
 
 EOF
@@ -41,11 +42,10 @@ EOF
 
 	case "$choice" in
 	1)
-		ifconfig
-		pause
+		ifconfig | less
 		;;
 	2)
-		route -n show
+		netstat -rn | egrep -v "UHL|UHb"
 		pause
 		;;
 	3)
@@ -62,7 +62,16 @@ EOF
 		pause
 		;;
 	4)
-		doas pfctl -si
+		printf 'Host or IP to Trace: '
+		read -r host || exit 0
+		case "$host" in
+		'' | -* | *[!A-Za-z0-9.:-]*)
+			echo "Invalid host."
+			;;
+		*)
+			traceroute -nI "$host"
+			;;
+		esac
 		pause
 		;;
 	5)
@@ -83,6 +92,10 @@ EOF
 		;;
 	8)
 		passwd
+		pause
+		;;
+	9)
+		/usr/local/arkgate_templates/setup_appadmin.sh
 		pause
 		;;
 	0)

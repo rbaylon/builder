@@ -39,7 +39,6 @@ EOF
 doas -C /etc/doas.conf
 usermod -s $menu admin
 echo "Done" >> $logfile
-chown -R admin:admin /usr/local/arkgate
 # relayd's "tls keypair arkgate.local" only ever looks in /etc/ssl (see
 # relayd.conf's header comment) and this relayd build can only load an
 # RSA key, not the EC key nginx would have been fine with.
@@ -50,6 +49,10 @@ mv /usr/local/arkgate/relayd.conf /etc/
 rcctl enable relayd
 mv /usr/local/arkgate/httpd.conf /etc/
 rcctl enable httpd
+#only admin can run this script
+chown -R admin:admin /usr/local/arkgate
+chown -R admin:admin /usr/local/arkgate_templates
+chmod 700 /usr/local/arkgate_templates/setup_appadmin.sh
 echo "install.site: custom provisioning complete" >> $logfile
 reboot
 
