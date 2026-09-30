@@ -23,7 +23,7 @@ while :; do
 	clear
 	cat <<EOF
 
-	ARKGATE  --  Internet Service Provider OS
+	Specz OS  --  Internet Service Provider Operating System
 
    1) Show network interfaces
    2) Show routing table

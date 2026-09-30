@@ -54,5 +54,7 @@ chown -R admin:admin /usr/local/arkgate
 chown -R admin:admin /usr/local/arkgate_templates
 chmod 700 /usr/local/arkgate_templates/setup_appadmin.sh
 echo "install.site: custom provisioning complete" >> $logfile
+echo "" >> /etc/ssh/sshd_config
+echo "AllowUsers admin" >> /etc/ssh/sshd_config
 reboot
 
