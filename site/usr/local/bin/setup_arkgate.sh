@@ -45,9 +45,9 @@ echo "Done" >> $logfile
 mkdir -p /etc/ssl/private
 openssl req -x509 -newkey rsa:2048 -keyout /etc/ssl/private/arkgate.local.key -out /etc/ssl/arkgate.local.crt -days 365 -nodes -subj '/CN=arkgate.local'
 chmod 600 /etc/ssl/private/arkgate.local.key
-mv /usr/local/arkgate/relayd.conf /etc/
+mv /usr/local/arkgate_templates/relayd.conf /etc/
 rcctl enable relayd
-mv /usr/local/arkgate/httpd.conf /etc/
+mv /usr/local/arkgate_templates/httpd.conf /etc/
 rcctl enable httpd
 #only admin can run this script
 chown -R admin:admin /usr/local/arkgate

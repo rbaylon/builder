@@ -1,0 +1,5 @@
+# Every script here runs on OpenBSD (see CLAUDE.md's hard constraint).
+# Force LF line endings regardless of a contributor's core.autocrlf --
+# a CRLF shebang line (`#!/bin/sh\r`) makes the kernel look for an
+# interpreter named "/bin/sh\r", which doesn't exist.
+* text=auto eol=lf

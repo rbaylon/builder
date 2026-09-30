@@ -91,12 +91,13 @@ rm -rf "${WORK}"
 mkdir -p "${CDDIR}" "${OUT_DIR}"
 
 echo "==> Fetching official install media for ${RELEASE}/${ARCH}"
-if [ -f "${BUILD_DIR}/install${RELEASE_SHORT}.iso" ]; then
-    cp -v ${BUILD_DIR}/install${RELEASE_SHORT}.iso "${WORK}/install.iso"
-else
+if [ ! -f "${BUILD_DIR}/install${RELEASE_SHORT}.iso" ]; then
 	ftp -o "${BUILD_DIR}/install${RELEASE_SHORT}.iso" "${SRC}/install${RELEASE_SHORT}.iso"
-	cp -v ${BUILD_DIR}/install${RELEASE_SHORT}.iso "${WORK}/install.iso"
 fi
+# Hardlink rather than copy -- WORK is always a subdirectory of
+# BUILD_DIR (same filesystem), so this is instant and, unlike cp,
+# doesn't temporarily double the ~800MB image on disk.
+ln -f "${BUILD_DIR}/install${RELEASE_SHORT}.iso" "${WORK}/install.iso"
 
 echo "==> Extracting install.iso"
 vnconfig vnd1 "${WORK}/install.iso"
@@ -105,6 +106,11 @@ mount -t cd9660 -o ro /dev/vnd1c "${WORK}/iso-mnt"
 ( cd "${WORK}/iso-mnt" && pax -rw -pe . "${CDDIR}/" )
 umount "${WORK}/iso-mnt"
 vnconfig -u vnd1
+# Done with the raw ISO now that its contents are extracted; drop the
+# WORK-side link (the BUILD_DIR cache copy is untouched, since the
+# other hardlink still holds its blocks) to leave headroom for the
+# repacked ISO later.
+rm -f "${WORK}/install.iso"
 
 echo "==> Building custom site set from ${SITEDIR}"
 SITETGZ="site${RELEASE_SHORT}.tgz"
@@ -135,12 +141,13 @@ rm -f "${SETDIR}/SHA256.sig"
 
 echo "==> Repacking ISO with mkhybrid"
 now=`date '+%Y%m%d%H%M'`
+OUTISO="${OUT_DIR}/specz-os-${RELEASE_SHORT}-${now}-.iso"
 mkhybrid -a -R -T -L -l -d -D -N \
-	-o "${OUT_DIR}/install${RELEASE_SHORT}-custom.iso" \
+	-o "${OUTISO}" \
 	-A "OpenBSD ${RELEASE} ${ARCH} Custom Install CD" \
 	-V "OpenBSD/${ARCH} ${RELEASE} Custom" \
 	-b "${RELEASE}/${ARCH}/cdbr" -c "${RELEASE}/${ARCH}/boot.catalog" \
 	-e "${RELEASE}/${ARCH}/eficdboot" \
 	"${CDDIR}"
 
-echo "==> Done: ${OUT_DIR}/specz-os-${RELEASE_SHORT}-${now}-.iso"
+echo "==> Done: ${OUTISO}"
