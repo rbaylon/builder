@@ -30,4 +30,5 @@ Directory does not contain SHA256.sig. Continue without verification? = yes
 # Uncomment and adjust if you need a specific disk layout instead of
 # accepting the installer's default whole-disk partitioning:
 # Which disk is the root disk? = sd0
-# Use (W)hole disk MBR, whole disk (G)PT, or (E)dit? = whole
+Use (W)hole disk MBR, whole disk (G)PT, or (E)dit? = W
+URL to autopartitioning template for disklabel? = 

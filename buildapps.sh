@@ -1,4 +1,4 @@
-#!/binsh
+#!/bin/sh
 
 build_app() {
 	cd $1
