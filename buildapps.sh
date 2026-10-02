@@ -27,3 +27,4 @@ do
     fi
     echo "Done moving $app files to site dir" 
 done
+cd $buildir_dir
