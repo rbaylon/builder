@@ -14,6 +14,7 @@ rm -rf $buildir_dir/site/usr/local/arkgate/*
 for app in arkgated srvcman srvcmanui billportal subsportal
 do
     echo "building $app"
+    mkdir -p ${dist_dir}/${app}
     if [ "${app}" = "arkgated" ];then
         cp -v ${buildir_dir}/site/usr/local/arkgate_templates/app.config.arkgated ${dist_dir}/arkgated/app.config
     else
