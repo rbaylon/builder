@@ -51,7 +51,7 @@ set -e
 build_dir=`pwd`
 cd $build_dir
 
-su - admin -c sh ${build_dir}/buildapps.sh $build_dir
+su - admin -c "sh ${build_dir}/buildapps.sh $build_dir"
 
 . ./config.sh
 if [ -f ./config.local.sh ]; then
