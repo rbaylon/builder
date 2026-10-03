@@ -56,5 +56,11 @@ chmod 700 /usr/local/arkgate_templates/setup_appadmin.sh
 echo "install.site: custom provisioning complete" >> $logfile
 echo "" >> /etc/ssh/sshd_config
 echo "AllowUsers admin" >> /etc/ssh/sshd_config
+for app in srvcman srvcmanui arkgated billportal captiveportal
+do
+    cp /usr/local/arkgate/${app}/rc.${app} /etc/rc.d/${app}
+    chmod 755 /etc/rc.d/${app}
+    rcctl enable $app
+done
 reboot
 

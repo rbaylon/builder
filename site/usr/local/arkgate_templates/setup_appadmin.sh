@@ -19,9 +19,9 @@ for e in srvcman srvcmanui arkgated
 do
     cp /usr/local/arkgate/${e}/.env /usr/local/arkgate/${e}/.env.${now}
     if [ ${e} = "arkgated" ];then
-        cp -f ${build_dir}/site/usr/local/arkgate_templates/app.config.${e} /usr/local/arkgate/${e}/app.config
+        cp -f /usr/local/arkgate_templates/app.config.${e} /usr/local/arkgate/${e}/app.config
     else
-        cp -f ${build_dir}/site/usr/local/arkgate_templates/.env.${e} /usr/local/arkgate/${e}/.env
+        cp -f /usr/local/arkgate_templates/.env.${e} /usr/local/arkgate/${e}/.env
     fi      
 done
 
