@@ -49,7 +49,7 @@
 
 set -e
 BUILD_DIR=`pwd`
-cd $build_dir
+cd $BUILD_DIR
 
 su - admin -c "sh ${BUILD_DIR}/buildapps.sh $BUILD_DIR"
 
