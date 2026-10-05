@@ -1,0 +1,8 @@
+{
+  "wifi_ip_list": "wifilist.txt",
+  "subs_ip_list": "subslist.txt",
+  "subs_portal_port": 4000,
+  "captive_portal_port": 3000,
+  "router": "myname",
+  "load_balance": false
+}

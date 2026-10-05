@@ -7,8 +7,12 @@
 # Keep this idempotent -- customize as the project grows.
 
 set -e
+now=`date '+%Y%m%d%H%M'`
 logfile=/var/log/install.site.log
 echo "chmod 755 /usr/local/bin/setup_arkgate.sh" >> /etc/rc.firsttime
 echo "/usr/local/bin/setup_arkgate.sh" >> /etc/rc.firsttime
+echo "cp /usr/local/arkgate_templates/config.json.arkgated /usr/local/arkgate/arkgated/rundir/config.json"  >> /etc/rc.firsttime
+echo "sed -i \"s/myname/specz${now}/\" /usr/local/arkgate/arkgated/rundir/config.json"  >> /etc/rc.firsttime
+echo "specz${now}" > /etc/myname
 echo "install.site: custom provisioning complete" >> $logfile
 
