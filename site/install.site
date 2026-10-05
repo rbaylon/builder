@@ -12,4 +12,5 @@ echo "chmod 755 /usr/local/bin/setup_arkgate.sh" >> /etc/rc.firsttime
 echo "/usr/local/bin/setup_arkgate.sh" >> /etc/rc.firsttime
 echo "install.site: custom provisioning complete" >> $logfile
 echo "Phase 1 setup complete."
+pause
 
