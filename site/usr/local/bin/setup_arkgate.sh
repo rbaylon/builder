@@ -62,5 +62,10 @@ do
     chmod 755 /etc/rc.d/${app}
     rcctl enable $app
 done
+now=`date '+%Y%m%d%H%M'`
+echo "specz${now}" > /etc/myname
+cp -v /usr/local/arkgate_templates/config.json.arkgated /usr/local/arkgate/arkgated/rundir/config.json
+sed -i "s/myname/specz${now}/" /usr/local/arkgate/arkgated/rundir/config.json"
+echo "Phase 2 setup complete."
 reboot
 

@@ -36,4 +36,6 @@ sed -i "s/appcreds/${b64creds}/" /usr/local/arkgate/arkgated/app.config
 sed -i "s/appsecret/${secret_key}/" /usr/local/arkgate/srvcman/.env
 sed -i "s/appsessionkey/${session_key}/" /usr/local/arkgate/srvcmanui/.env
 
-print "Password reset done. You may now reboot the system."
+print "Password reset done. Rebooting system...."
+sleep 3
+reboot

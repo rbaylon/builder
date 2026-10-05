@@ -4,3 +4,6 @@ rundir=/usr/local/arkgate/arkgated/rundir/
 socketfile=/var/arkgated.sock
 arkgid=1001
 creds=appcreds
+tlsclientca=""
+tlscert=""
+tlskey=""
