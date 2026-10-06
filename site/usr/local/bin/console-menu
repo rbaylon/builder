@@ -95,7 +95,7 @@ EOF
 		pause
 		;;
 	9)
-		/usr/local/arkgate_templates/setup_appadmin.sh
+		/usr/local/arkgate_templates/setup_appadmin.sh no
 		pause
 		;;
 	0)

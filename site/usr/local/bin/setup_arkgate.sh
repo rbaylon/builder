@@ -66,6 +66,8 @@ now=`date '+%Y%m%d%H%M'`
 echo "specz${now}" > /etc/myname
 cp -v /usr/local/arkgate_templates/config.json.arkgated /usr/local/arkgate/arkgated/rundir/config.json
 sed -i "s/myname/specz${now}/" /usr/local/arkgate/arkgated/rundir/config.json
+cp -v /usr/local/arkgate_templates/modules.json /usr/local/arkgate/srvcman/
+/usr/local/arkgate_templates/setup_appadmin.sh
 echo "Phase 2 setup complete."
 reboot
 

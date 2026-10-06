@@ -1,9 +1,12 @@
 #!/bin/sh
 
-printf "A reboot is required for the changes to take effect! Are you sure? [yes/no]: "
-read proceed
-if [ $proceed != "yes" ];then
-    exit
+firsttime=$1
+if [ ${firsttime} = "no" ];then
+    printf "A reboot is required for the changes to take effect! Are you sure? [yes/no]: "
+    read proceed
+    if [ $proceed != "yes" ];then
+        exit
+    fi
 fi
 
 printf "Enter app admin password: "
