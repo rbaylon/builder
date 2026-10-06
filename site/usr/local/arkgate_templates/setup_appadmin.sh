@@ -1,7 +1,7 @@
 #!/bin/sh
 
 firsttime=$1
-if [ $firsttime = "no" ];then
+if [ "${firsttime}x" = "nox" ];then
     printf "A reboot is required for the changes to take effect! Are you sure? [yes/no]: "
     read proceed
     if [ $proceed != "yes" ];then
@@ -41,6 +41,6 @@ sed -i "s/appsessionkey/${session_key}/" /usr/local/arkgate/srvcmanui/.env
 
 print "Password reset done. Rebooting system...."
 sleep 3
-if [ $firsttime = "no" ];then
+if [ "${firsttime}x" = "nox" ];then
     doas   reboot
 fi
