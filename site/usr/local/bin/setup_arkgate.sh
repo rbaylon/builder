@@ -68,6 +68,7 @@ cp -v /usr/local/arkgate_templates/config.json.arkgated /usr/local/arkgate/arkga
 sed -i "s/myname/specz${now}/" /usr/local/arkgate/arkgated/rundir/config.json
 cp -v /usr/local/arkgate_templates/modules.json /usr/local/arkgate/srvcman/
 /usr/local/arkgate_templates/setup_appadmin.sh
+rcctl enable unbound
 echo "Phase 2 setup complete."
 reboot
 
