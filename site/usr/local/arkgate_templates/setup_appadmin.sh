@@ -13,7 +13,7 @@ printf "Enter app admin password: "
 read password
 # use this to generate
 username=admin
-b64creds=`printf "{$username}:${password}" | uuencode -m - | egrep -v "begin|===="`
+b64creds=`printf "${username}:${password}" | uuencode -m - | egrep -v "begin|===="`
 secret_key=`openssl rand -hex 32`
 session_key=`openssl rand -hex 32`
 build_dir=`pwd`
