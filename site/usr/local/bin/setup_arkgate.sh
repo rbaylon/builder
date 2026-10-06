@@ -24,7 +24,6 @@ echo "Installing golang..." >> $logfile
 pkg_add go snmp_exporter
 echo "Done" >> $logfile
 echo "pfctl -f /etc/pf.conf" >> /etc/rc.local
-echo "rm -f /var/arkgated.sock" >> /etc/rc.local
 
 echo "Setting up console menu login shell for admin..." >> $logfile
 menu=/usr/local/bin/console-menu
