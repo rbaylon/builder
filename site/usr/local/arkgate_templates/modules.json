@@ -1,0 +1,20 @@
+{
+  "modules": [
+    "vouchers",
+    "dhcps",
+    "firewall",
+    "payments",
+    "tunnels",
+    "collections",
+    "pppoe",
+    "pflow",
+    "dhcpserver",
+    "gatewaymonitor",
+    "unbounddns",
+    "staticroutes",
+    "captiveportal",
+    "billportal",
+    "fdmonitor",
+    "snmpserver"
+  ]
+}
