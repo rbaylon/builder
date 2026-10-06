@@ -41,4 +41,6 @@ sed -i "s/appsessionkey/${session_key}/" /usr/local/arkgate/srvcmanui/.env
 
 print "Password reset done. Rebooting system...."
 sleep 3
-doas   reboot
+if [ $firsttime = "no" ];then
+    doas   reboot
+fi
