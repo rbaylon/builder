@@ -79,7 +79,13 @@ install.conf           -> answers to installer prompts (autoinstall(8)),
    *after* this step, not before, since it must hash the final patched
    `bsd.rd`.
 6. Repack everything with `mkhybrid`, using the same flags as
-   OpenBSD's own `distrib/${ARCH}/iso/Makefile`.
+   OpenBSD's own `distrib/${ARCH}/iso/Makefile`. The output is named
+   `specz-os-${RELEASE_SHORT}-v<VERSION>-<timestamp>.iso`.
+7. After mkhybrid succeeds, `version.sh bump` advances `VERSION`
+   (default patch: 1.0.0 -> 1.0.1). `VERSION` holds the version the
+   *next* ISO will get, so the first build is v1.0.0. A failed build
+   doesn't bump, so its version number is reused on retry. Use
+   `sh version.sh bump minor|major` by hand to change the other parts.
 
 Config layering: `config.sh` (committed defaults: release/arch/mirror/
 build & output dirs) is sourced first, then `config.local.sh`

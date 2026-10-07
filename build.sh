@@ -141,7 +141,8 @@ rm -f "${SETDIR}/SHA256.sig"
 
 echo "==> Repacking ISO with mkhybrid"
 now=`date '+%Y%m%d%H%M'`
-OUTISO="${OUT_DIR}/specz-os-${RELEASE_SHORT}-${now}-.iso"
+VERSION_NUM="$(sh "${REPO_DIR}/version.sh" show)"
+OUTISO="${OUT_DIR}/specz-os-${RELEASE_SHORT}-v${VERSION_NUM}-${now}.iso"
 mkhybrid -a -R -T -L -l -d -D -N \
 	-o "${OUTISO}" \
 	-A "OpenBSD ${RELEASE} ${ARCH} Custom Install CD" \
@@ -150,4 +151,5 @@ mkhybrid -a -R -T -L -l -d -D -N \
 	-e "${RELEASE}/${ARCH}/eficdboot" \
 	"${CDDIR}"
 
+sh "${REPO_DIR}/version.sh" bump >/dev/null
 echo "==> Done: ${OUTISO}"
