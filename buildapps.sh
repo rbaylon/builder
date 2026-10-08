@@ -11,6 +11,7 @@ src_base=~/go/src/github.com/rbaylon
 dist_dir=/usr/local/arkgate
 rm -rf $dist_dir/*
 rm -rf $buildir_dir/site/usr/local/arkgate/*
+:> ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
 for app in arkgated srvcman srvcmanui billportal subsportal
 do
     echo "building $app"
@@ -26,7 +27,7 @@ do
         fi
     fi
     build_app ${src_base}/${app}
-    ls $dist_dir | grep tar > ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
+    ls ${dist_dir}/${app}-*gz | sed 's|/usr/local/arkgate/||' >> ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
     echo "done building $app"
     echo "Moving $app bin files to site dir"
     if [ "${app}" = "subsportal" ];then
