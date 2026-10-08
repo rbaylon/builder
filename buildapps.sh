@@ -26,12 +26,13 @@ do
         fi
     fi
     build_app ${src_base}/${app}
+    ls $dist_dir | grep tar > ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
     echo "done building $app"
     echo "Moving $app bin files to site dir"
     if [ "${app}" = "subsportal" ];then
-        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/captiveportal.tar.gz
+        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/captiveportal-*.tar.gz
     else
-        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/${app}.tar.gz
+        tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/${app}-*.tar.gz
     fi
     echo "Done moving $app files to site dir" 
 done
