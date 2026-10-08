@@ -27,12 +27,13 @@ do
         fi
     fi
     build_app ${src_base}/${app}
-    ls ${dist_dir}/${app}-*gz | sed 's|/usr/local/arkgate/||' >> ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
     echo "done building $app"
     echo "Moving $app bin files to site dir"
     if [ "${app}" = "subsportal" ];then
+        ls ${dist_dir}/captiveportal-*gz | sed 's|/usr/local/arkgate/||' >> ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
         tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/captiveportal-*.tar.gz
     else
+        ls ${dist_dir}/${app}-*gz | sed 's|/usr/local/arkgate/||' >> ${buildir_dir}/site/usr/local/arkgate_templates/versions.txt
         tar -C ${buildir_dir}/site/usr/local/arkgate -xzvf ${dist_dir}/${app}-*.tar.gz
     fi
     echo "Done moving $app files to site dir" 
