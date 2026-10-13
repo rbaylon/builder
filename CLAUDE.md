@@ -73,11 +73,29 @@ install.conf           -> answers to installer prompts (autoinstall(8)),
 5. `bsd.rd` ships gzip-compressed on the install media (the bootloader
    inflates it at boot); gunzip it, extract its ramdisk image with
    `rdsetroot -x`, mount it, drop in `install.conf` as
-   `/auto_install.conf`, unmount, write it back with `rdsetroot`, then
-   re-gzip it back to `bsd.rd`. (`bsd`/`bsd.mp` are plain ELF, not
-   compressed -- only `bsd.rd` needs this.) SHA256 is regenerated
-   *after* this step, not before, since it must hash the final patched
-   `bsd.rd`.
+   `/auto_install.conf`, and while still mounted, sed-patch two of its
+   scripts:
+   - `/.profile`: this is where the *real* autoinstall countdown lives
+     (not `install.sub`). When `/auto_install.conf` is present (our
+     case) or the box netbooted, `.profile` prints "Starting
+     non-interactive mode in `${TIMEOUT_PERIOD_SEC}` seconds...",
+     starts a background `sleep $TIMEOUT_PERIOD_SEC && kill $$`
+     watchdog, and the `(I)/(U)/(A)/(S)` menu `read` defaults to `(A)`
+     once that watchdog fires. `build.sh` changes
+     `TIMEOUT_PERIOD_SEC=5` to `=1`.
+   - `/install.sub`: adds a pause-or-read (`command -v pause`, else
+     `read`) prompt to remove the install media right before
+     `do_autoinstall()`'s `exec reboot` -- stock install.sub reboots
+     straight back into the same CD with no such prompt.
+
+   Both anchors are confirmed byte-exact against the real
+   `install79.iso`'s `bsd.rd` (downloaded and grepped directly -- see
+   "Known gaps" below), and each must match exactly once or the build
+   aborts rather than silently shipping without this behavior. Unmount,
+   write the ramdisk back with `rdsetroot`, then re-gzip it back to
+   `bsd.rd`. (`bsd`/`bsd.mp` are plain ELF, not compressed -- only
+   `bsd.rd` needs this.) SHA256 is regenerated *after* this step, not
+   before, since it must hash the final patched `bsd.rd`.
 6. Repack everything with `mkhybrid`, using the same flags as
    OpenBSD's own `distrib/${ARCH}/iso/Makefile`. The output is named
    `specz-os-${RELEASE_SHORT}-v<VERSION>-<timestamp>.iso`.
@@ -128,3 +146,18 @@ sensitive answers -- `install.conf.example` is the tracked template.
   -- if autoinstall stalls, it's waiting on a prompt whose text doesn't
   match; run the installer interactively once against the target
   release to get exact wording.
+- The `.profile`/`install.sub` sed patch anchors (step 5) are confirmed
+  byte-exact against the **real** target: `install79.iso`'s `bsd.rd`
+  was downloaded straight from `cdn.openbsd.org` and `gzip -dc`'d --
+  that alone is enough to grep its text, since the ramdisk's raw FFS
+  blocks sit undecoded but still readable inside the decompressed ELF
+  (no `rdsetroot`/`vnconfig`/OpenBSD host needed just to check this).
+  That's how the real countdown was found in the first place: an
+  earlier version of this patch targeted `install.sub` on the mistaken
+  assumption that's where the "5 seconds" lived; it doesn't -- `.profile`
+  owns the countdown, `install.sub` never had one. **Still not
+  validated:** the actual `vnconfig`/`mount`/`sed`-in-place mechanics
+  in `build.sh`, on a real OpenBSD host. If `RELEASE`/`ARCH` changes,
+  re-run the same curl+gzip+grep check against the new `bsd.rd` before
+  trusting the anchors still match -- `build.sh` hard-fails loudly if
+  they don't, rather than silently skipping the patch.
