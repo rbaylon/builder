@@ -141,7 +141,8 @@ vnconfig -u vnd1
 # other hardlink still holds its blocks) to leave headroom for the
 # repacked ISO later.
 rm -f "${WORK}/install.iso"
-
+VERSION_NUM="$(sh "${REPO_DIR}/version.sh" show)"
+echo $VERSION_NUM > ${SITEDIR}/usr/local/arkgate/RELEASE
 echo "==> Building custom site set from ${SITEDIR}"
 SITETGZ="site${RELEASE_SHORT}.tgz"
 if [ -f "${SITEDIR}/install.site" ]; then
@@ -241,7 +242,6 @@ rm -f "${SETDIR}/SHA256.sig"
 
 echo "==> Repacking ISO with mkhybrid"
 now=`date '+%Y%m%d%H%M'`
-VERSION_NUM="$(sh "${REPO_DIR}/version.sh" show)"
 OUTISO="${OUT_DIR}/specz-os-${RELEASE_SHORT}-v${VERSION_NUM}-${now}.iso"
 mkhybrid -a -R -T -L -l -d -D -N \
 	-o "${OUTISO}" \
