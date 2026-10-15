@@ -25,7 +25,7 @@ while :; do
 
 	Specz OS  --  Internet Service Provider Operating System
 
-   1) Show network interfaces
+   1) Shell
    2) Show routing table
    3) Ping a host
    4) Traceroute
@@ -42,10 +42,10 @@ EOF
 
 	case "$choice" in
 	1)
-		ifconfig | less
+		/bin/ksh
 		;;
 	2)
-		netstat -rn | egrep -v "UHL|UHb"
+		netstat -rn | egrep -v "UHL|UHb" | less
 		pause
 		;;
 	3)
