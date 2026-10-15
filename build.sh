@@ -47,9 +47,16 @@
 # end-to-end and produces a structurally correct ISO (site set present,
 # bsd.rd correctly re-gzipped, SHA256 matches the patched files, and
 # the embedded auto_install.conf is byte-identical to the source
-# install.conf). NOT yet validated: actually booting the resulting ISO
-# and confirming (A)utoinstall completes unattended -- do that before
-# trusting a build fully. Background:
+# install.conf). Also boot-tested: reached the "(I)nstall, (U)pgrade,
+# (A)utoinstall or (S)hell?" menu, which caught a real bug (now fixed):
+# the .profile/install.sub sed patches used to `mv` a freshly-sed'd
+# file over the original, which silently replaced install.sub's inode
+# -- and with it, its executable bit -- breaking /autoinstall,
+# /install, /upgrade (symlinks to install.sub) with "cannot execute:
+# Permission denied". Fixed by `cat`-ing the patched content into the
+# existing file instead. NOT yet validated past that menu: whether
+# (A)utoinstall itself fires and completes unattended -- do that next,
+# before trusting a build fully. Background:
 #   - autoinstall(8), rdsetroot(8), install.site(5)
 #   - https://www.openbsd.org/faq/faq4.html
 #   - https://github.com/openbsd/src/blob/master/distrib/amd64/iso/Makefile
@@ -189,7 +196,14 @@ grep -q '^TIMEOUT_PERIOD_SEC=1$' "${RDPROFILE}.new" || {
 	rm -f "${RDPROFILE}.new"
 	exit 1
 }
-mv "${RDPROFILE}.new" "${RDPROFILE}"
+# cat into the existing file rather than `mv`-ing over it: mv would
+# replace .profile's inode with a freshly-created one at default
+# (umask) permissions. Harmless for .profile itself (it's sourced, not
+# exec'd) but the same pattern below patches install.sub, which IS
+# exec'd via /autoinstall, /install, /upgrade -- so both are written
+# this way for consistency and to avoid the mistake spreading.
+cat "${RDPROFILE}.new" > "${RDPROFILE}"
+rm -f "${RDPROFILE}.new"
 
 echo "==> Patching install.sub with a media-removal prompt before reboot"
 RDSUB="${WORK}/rd-mnt/install.sub"
@@ -229,7 +243,15 @@ grep -q 'Autoinstall finished. Remove the installation media' "${RDSUB}.new" || 
 	rm -f "${RDSUB}.new"
 	exit 1
 }
-mv "${RDSUB}.new" "${RDSUB}"
+# cat into the existing file, NOT `mv` over it: install.sub needs to
+# stay executable (/autoinstall, /install, /upgrade are symlinks to
+# it), and `mv` would swap in a freshly-created file at default umask
+# permissions (no exec bit), breaking all three with "cannot execute:
+# Permission denied" at the boot menu -- confirmed by an actual test
+# boot. cat preserves the original inode (and its mode/owner),
+# overwriting only its content.
+cat "${RDSUB}.new" > "${RDSUB}"
+rm -f "${RDSUB}.new"
 
 umount "${WORK}/rd-mnt"
 vnconfig -u vnd1

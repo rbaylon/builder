@@ -182,7 +182,11 @@ grep -q '^TIMEOUT_PERIOD_SEC=1$' "${RDPROFILE}.new" || {
 	rm -f "${RDPROFILE}.new"
 	exit 1
 }
-mv "${RDPROFILE}.new" "${RDPROFILE}"
+# cat into the existing file rather than `mv`-ing over it -- see the
+# install.sub patch below for why (confirmed by a real test boot of
+# build.sh's ISO).
+cat "${RDPROFILE}.new" > "${RDPROFILE}"
+rm -f "${RDPROFILE}.new"
 
 echo "==> Patching install.sub with a media-removal prompt before reboot"
 RDSUB="${WORK}/rd-mnt/install.sub"
@@ -215,7 +219,15 @@ grep -q 'Autoinstall finished. Remove the installation media' "${RDSUB}.new" || 
 	rm -f "${RDSUB}.new"
 	exit 1
 }
-mv "${RDSUB}.new" "${RDSUB}"
+# cat into the existing file, NOT `mv` over it: install.sub needs to
+# stay executable (/autoinstall, /install, /upgrade are symlinks to
+# it), and `mv` would swap in a freshly-created file at default umask
+# permissions (no exec bit), breaking all three with "cannot execute:
+# Permission denied" at the boot menu -- confirmed by an actual test
+# boot of build.sh's ISO. cat preserves the original inode (and its
+# mode/owner), overwriting only its content.
+cat "${RDSUB}.new" > "${RDSUB}"
+rm -f "${RDSUB}.new"
 
 umount "${WORK}/rd-mnt"
 vnconfig -u vnd2

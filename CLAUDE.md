@@ -200,12 +200,21 @@ in advance. `install.conf.usb.example` documents this.
   Volume ID) is capped at 32 characters; and a fresh `${BUILD_DIR}`
   needs its leftover mounts/`vnd1` cleared before `rm -rf`, in case a
   previous run was interrupted mid-mount.
-- **Not yet validated:** actually booting the resulting ISO and
-  confirming `(A)utoinstall` completes unattended. Exact installer
-  prompt wording in `install.conf` can drift between OpenBSD releases
-  -- if autoinstall stalls, it's waiting on a prompt whose text doesn't
-  match; run the installer interactively once against the target
-  release to get exact wording.
+- Boot-tested on real hardware: reached the `(I)nstall, (U)pgrade,
+  (A)utoinstall or (S)hell?` menu, which caught a real bug (now fixed):
+  the `.profile`/`install.sub` sed patches used to `mv` a freshly-sed'd
+  temp file over the original. `mv` replaces the target's *inode*, so
+  this silently dropped `install.sub`'s executable bit, breaking
+  `/autoinstall`, `/install`, `/upgrade` (symlinks to `install.sub`)
+  with `sh: /upgrade: cannot execute - Permission denied` right at that
+  menu. Fixed by `cat`-ing the patched content into the existing file
+  instead of replacing it, which preserves the original inode's mode.
+  **Still not validated:** whether `(A)utoinstall` itself fires and
+  completes past that menu. Exact installer prompt wording in
+  `install.conf` can drift between OpenBSD releases -- if autoinstall
+  stalls, it's waiting on a prompt whose text doesn't match; run the
+  installer interactively once against the target release to get exact
+  wording.
 - The `.profile`/`install.sub` sed patch anchors (step 5) are confirmed
   byte-exact against the **real** target: `install79.iso`'s `bsd.rd`
   was downloaded straight from `cdn.openbsd.org` and `gzip -dc`'d --
