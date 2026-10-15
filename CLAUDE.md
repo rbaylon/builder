@@ -4,47 +4,58 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-Builds a custom, self-contained OpenBSD install ISO that autoinstalls
-unattended: a custom `siteXX.tgz` file set (arbitrary files/scripts
-overlaid onto the target root filesystem, plus an optional
-`install.site` post-install hook) and an `install.conf` autoinstall
-response file, both embedded directly in the ISO so no network is
-needed at boot.
+Builds a custom, self-contained OpenBSD install image that
+autoinstalls unattended: a custom `siteXX.tgz` file set (arbitrary
+files/scripts overlaid onto the target root filesystem, plus an
+optional `install.site` post-install hook) and an autoinstall response
+file, both embedded directly in the image so no network is needed at
+boot. Two scripts produce two artifact types from the same `site/`:
+`build.sh` makes an ISO (for CD/virtual-media boot), `build_usb.sh`
+makes a raw USB disk image (for `dd`'ing onto a flash drive). They
+share `config.sh`/`site/`/`version.sh` but need separate response
+files (`install.conf` vs `install.conf.usb`) -- see "build_usb.sh" below
+for why.
 
 Default target is OpenBSD 7.9 / amd64, controlled by `config.sh`.
 
 ## Hard constraint: build must run on OpenBSD
 
-The actual ISO remastering needs native OpenBSD tools with no
+The actual image remastering needs native OpenBSD tools with no
 Windows/Linux equivalent: `rdsetroot(8)` (patches the ramdisk kernel
-`bsd.rd`), `vnconfig(8)` + `mount` (to edit the ramdisk FFS image and
-to read the source ISO's cd9660 filesystem), and `mkhybrid` (rebuilds
-the hybrid BIOS+EFI bootable ISO). There is no cross-build path from
-other OSes.
+`bsd.rd`), `vnconfig(8)` + `mount` (to edit filesystem images), and
+`mkhybrid` (rebuilds the hybrid BIOS+EFI bootable ISO; `build_usb.sh`
+doesn't need it -- see below). There is no cross-build path from other
+OSes.
 
-`build.sh` is therefore a single POSIX `/bin/sh` script that runs
+Both `build.sh` and `build_usb.sh` are POSIX `/bin/sh` scripts that run
 **directly on an OpenBSD host, as root** (e.g. via `doas ./build.sh`)
-and does the entire fetch/patch/repack pipeline itself -- there is no
-separate remote driver or SSH hop.
+and do their entire fetch/patch/repack pipeline themselves -- there is
+no separate remote driver or SSH hop.
 
 Never try to run `rdsetroot`/`vnconfig`/`mkhybrid` on a non-OpenBSD
 machine -- they don't exist there. Any change to the build logic
-belongs in `build.sh`, and needs to be validated by actually running it
-on an OpenBSD host, not just read for plausibility.
+belongs in `build.sh`/`build_usb.sh`, and needs to be validated by
+actually running it on an OpenBSD host, not just read for plausibility.
 
 ## Commands
 
 ```sh
 # One-time setup
-cp install.conf.example install.conf   # edit hostname/ssh key/timezone
+cp install.conf.example install.conf           # for build.sh (ISO)
+cp install.conf.usb.example install.conf.usb   # for build_usb.sh (USB)
+# edit both: hostname/ssh key/timezone, and the USB one's disk names
 
-# Build (fetches the install ISO, embeds site/ + install.conf, repacks
-# it, and writes the result to out/)
+# Build an ISO (fetches the install ISO, embeds site/ + install.conf,
+# repacks it, and writes the result to out/)
 doas ./build.sh
+
+# Build a USB image (fetches install.img, embeds site/ +
+# install.conf.usb, edits it in place, and writes the result to out/)
+doas ./build_usb.sh
 ```
 
 There is no lint/test suite -- correctness is verified by booting the
-resulting ISO in a VM and confirming autoinstall completes.
+resulting ISO/image in a VM and confirming autoinstall completes.
 
 ## Architecture / data flow
 
@@ -111,6 +122,55 @@ build & output dirs) is sourced first, then `config.local.sh`
 gitignored by default since it may end up carrying host-specific or
 sensitive answers -- `install.conf.example` is the tracked template.
 
+## build_usb.sh (USB image variant)
+
+Same `site/`/`config.sh`/`version.sh`, different media and a genuinely
+different on-disk layout, confirmed by downloading the real
+`install79.img` and parsing its MBR + embedded OpenBSD disklabel
+directly with Python (no OpenBSD host needed just to check structure):
+it's two MBR partitions -- a small EFI System Partition (FAT,
+disklabel `i`) and a large OpenBSD partition (MBR type `0xa6`,
+disklabel `a`, fstype 7/BSDFFS) that *is* the whole install tree,
+natively FFS instead of ISO9660. `vnconfig` reads that embedded
+disklabel automatically, so `vnconfig vndN install79.img` exposes
+`/dev/vndNa` directly -- no manual `fdisk`/`disklabel` step needed.
+
+Consequences for the script, vs. `build.sh`:
+- No extract-then-repack: the FFS partition is mounted read-write and
+  edited *in place*; the edited working copy of `install79.img` IS the
+  final artifact. There's no `mkhybrid` step.
+- The pristine download is `cp`'d, not hardlinked, into the working
+  dir before editing -- `build.sh` can safely hardlink its ISO because
+  that mount is read-only; here the mount is read-write, so a hardlink
+  would corrupt the cached download for future runs.
+- Two `vnd` units are needed concurrently (`vnd1` for the outer FFS
+  partition, `vnd2` for the inner ramdisk-within-`bsd.rd`), since the
+  outer mount has to stay up for the whole script -- unlike `build.sh`,
+  where the ISO mount is long gone before `bsd.rd` gets patched.
+- `bsd.rd`'s location inside the FFS tree was *not* independently
+  confirmed (only the partition-level layout above was actually
+  parsed); the script locates it with `find` rather than a hardcoded
+  path, and hard-fails if it doesn't find exactly one.
+- The `/.profile` and `/install.sub` sed patches are identical to
+  `build.sh`'s, since it's the same `bsd.rd` file either way.
+
+**USB media is a disk to the installer, not a CD-ROM**, so
+`install.conf`'s `Location of sets = cdrom` doesn't apply and would
+stall autoinstall -- hence the separate `install.conf.usb`. Confirmed
+against the real `install.sub` text (`install_sets()` ->
+`install_disk()` -> `mount_mnt2()` -> `ask_which()`, whose prompt
+format is literally `"Which $name $query?"`):
+```
+Location of sets = disk
+Is the disk partition already mounted? = no
+Which disk contains the install media? = sd1
+Which sd1 partition has the install sets? = a
+```
+The partition answer (`a`) is fixed -- that's genuinely where the sets
+live, per the disklabel parse above. The disk name (`sd1`) is NOT: it
+depends on how many disks the *target* machine has, and can't be known
+in advance. `install.conf.usb.example` documents this.
+
 ## Key references
 
 - [autoinstall(8)](https://man.openbsd.org/autoinstall.8) -- response
@@ -161,3 +221,11 @@ sensitive answers -- `install.conf.example` is the tracked template.
   re-run the same curl+gzip+grep check against the new `bsd.rd` before
   trusting the anchors still match -- `build.sh` hard-fails loudly if
   they don't, rather than silently skipping the patch.
+- **`build_usb.sh` has not been run at all** -- its partition/disklabel
+  facts come from directly parsing a real downloaded `install79.img`
+  (see "build_usb.sh" above), but the script's actual
+  `vnconfig`/`mount`/`sed`-in-place mechanics are untested on a real
+  OpenBSD host, and the exact in-tree path to `bsd.rd` was never
+  confirmed (mitigated with `find` + a hard-fail guard, not a known
+  answer). Validate the same way `build.sh` was: run it, then boot the
+  resulting `.img` (or a `dd`'d USB stick) in a VM.

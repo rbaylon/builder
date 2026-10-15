@@ -1,0 +1,54 @@
+# Example autoinstall(8) response file for a USB install built by
+# build_usb.sh. Copy to install.conf.usb and edit.
+#
+# This is deliberately a SEPARATE file from install.conf (used by
+# build.sh for the ISO): USB media shows up to the installer as a
+# disk, not a CD-ROM, so "Location of sets" and its follow-up
+# questions are answered completely differently here. Everything else
+# (hostname, user, timezone, target disk layout) is the same as
+# install.conf.
+#
+# Format: "<prompt text without the trailing ?> = <answer>", one per
+# line, matching the installer's interactive prompts verbatim. Wording
+# can shift between releases -- if autoinstall stalls on a question,
+# run the installer interactively once against your target release/USB
+# stick and copy the exact prompt text it printed.
+#
+# Reference: https://man.openbsd.org/autoinstall.8
+
+System hostname = myhost
+Password for root = *************
+Change the default console to com0 = no
+Setup a user = puffy
+Password for user = *************
+Public ssh key for user = ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA... you@example.com
+What timezone are you in = Asia/Manila
+
+# USB media is a *disk* to the installer, not a CD-ROM. build_usb.sh
+# confirmed (by directly parsing the real install79.img's MBR +
+# embedded OpenBSD disklabel) that the install sets always live on
+# partition "a" of that disk, regardless of release/arch -- but the
+# disk DEVICE NAME below ("sd1") is specific to the *target* machine:
+# it depends on how many other disks that machine has and what order
+# the BIOS/kernel enumerates them in. Boot the USB stick once and
+# answer interactively up to this point to see which "sdN" actually
+# gets listed under "Available disks are: ...", then hardcode that
+# here -- it must be a DIFFERENT disk from the destination disk
+# answered further below.
+Location of sets = disk
+Is the disk partition already mounted? = no
+Which disk contains the install media? = sd1
+Which sd1 partition has the install sets? = a
+
+# The custom SHA256 this project generates isn't signify(1)-signed, so
+# the installer will ask about that -- answer it here or autoinstall
+# will stop and wait for interactive input.
+Directory does not contain SHA256.sig. Continue without verification? = yes
+
+# Uncomment and adjust if you need a specific disk layout instead of
+# accepting the installer's default whole-disk partitioning. This is
+# the DESTINATION disk being installed TO -- a different disk from the
+# USB media answered above (e.g. sd0 here vs sd1 above).
+# Which disk is the root disk? = sd0
+Use (W)hole disk MBR, whole disk (G)PT, or (E)dit? = W
+URL to autopartitioning template for disklabel? =

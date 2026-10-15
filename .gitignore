@@ -2,4 +2,6 @@
 /build/
 /config.local.sh
 /install.conf
+/install.conf.usb
 *.iso
+*.img

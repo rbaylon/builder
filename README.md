@@ -22,24 +22,32 @@ Default target: OpenBSD 7.9 / amd64 (edit `config.sh` to change).
   drops `site79.tgz` next to the standard sets on the disc, then
   repacks the ISO with `mkhybrid` (same tool/flags OpenBSD's own
   release build uses).
+- `build_usb.sh` builds the same kind of thing as a raw USB disk image
+  (`install79.img`) instead of an ISO, ready to `dd` onto a flash
+  drive. It needs its own `install.conf.usb` (USB media is a disk to
+  the installer, not a CD-ROM, so the "Location of sets" answers
+  differ) but otherwise shares `site/` and `config.sh` with the ISO.
 
 See [CLAUDE.md](CLAUDE.md) for the full architecture writeup.
 
 ## Requirements
 
 Building requires native OpenBSD tools (`rdsetroot`, `vnconfig`,
-`mkhybrid`) that only exist on OpenBSD, so `build.sh` must be run
-**directly on an OpenBSD host, as root**.
+`mkhybrid`) that only exist on OpenBSD, so `build.sh`/`build_usb.sh`
+must be run **directly on an OpenBSD host, as root**.
 
 ## Quick start
 
 1. `cp install.conf.example install.conf` and edit it (hostname, SSH
-   key, timezone, ...).
+   key, timezone, ...). For a USB build, also
+   `cp install.conf.usb.example install.conf.usb` and edit it (same
+   fields, plus the USB-specific disk/partition answers).
 2. Add whatever files/scripts you want under `site/` (remember: it
    mirrors the target's root filesystem).
 3. `doas ./build.sh` -- fetches the official install ISO, builds
    `site79.tgz`, embeds `install.conf` into `bsd.rd`, repacks the ISO,
-   and drops the result into `out/`.
+   and drops the result into `out/`. For a USB image instead, run
+   `doas ./build_usb.sh`.
 
 ## Status
 
@@ -47,3 +55,7 @@ Building requires native OpenBSD tools (`rdsetroot`, `vnconfig`,
 and produces a structurally correct ISO. Not yet validated: actually
 booting the resulting ISO and confirming autoinstall fires and
 completes unattended -- do that before trusting a build fully.
+`build_usb.sh` has not been run at all yet; its on-disk layout
+assumptions were confirmed by directly downloading and parsing a real
+`install79.img`, but the script itself needs a real run-through before
+trusting it.
