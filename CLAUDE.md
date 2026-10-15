@@ -147,12 +147,23 @@ Consequences for the script, vs. `build.sh`:
   partition, `vnd2` for the inner ramdisk-within-`bsd.rd`), since the
   outer mount has to stay up for the whole script -- unlike `build.sh`,
   where the ISO mount is long gone before `bsd.rd` gets patched.
-- `bsd.rd`'s location inside the FFS tree was *not* independently
-  confirmed (only the partition-level layout above was actually
-  parsed); the script locates it with `find` rather than a hardcoded
-  path, and hard-fails if it doesn't find exactly one.
+- `bsd.rd` exists in **two places** on the image, confirmed by an
+  actual build run: `/bsd.rd` at the FS root (what the bootloader
+  actually boots -- its hardcoded default path, needing no
+  `/etc/boot.conf` override) and `/${RELEASE}/${ARCH}/bsd.rd` (mirrors
+  the ISO's sets directory, otherwise inert). Rather than bet the
+  build on which one actually boots, `build_usb.sh` finds every
+  `bsd.rd` with `find` and patches *all* of them identically in a loop
+  -- they're the same upstream file, so the extra patch is harmless.
+  The `RELEASE`/`ARCH` copy is specifically picked out (by path) as
+  the sets directory for `site.tgz`/`SHA256`.
 - The `/.profile` and `/install.sub` sed patches are identical to
-  `build.sh`'s, since it's the same `bsd.rd` file either way.
+  `build.sh`'s, since it's the same `bsd.rd` file either way. The
+  `install.sub` patch is written to a sed script file once
+  (`install_sub.sed`) rather than inlined in the loop, specifically to
+  avoid the loop's shell indentation leaking a stray leading tab onto
+  the line closing the quoted sed program -- which would land as a
+  bogus extra "command" right after the `a\` block's closing `fi`.
 
 **USB media is a disk to the installer, not a CD-ROM**, so
 `install.conf`'s `Location of sets = cdrom` doesn't apply and would
@@ -230,11 +241,14 @@ in advance. `install.conf.usb.example` documents this.
   re-run the same curl+gzip+grep check against the new `bsd.rd` before
   trusting the anchors still match -- `build.sh` hard-fails loudly if
   they don't, rather than silently skipping the patch.
-- **`build_usb.sh` has not been run at all** -- its partition/disklabel
-  facts come from directly parsing a real downloaded `install79.img`
-  (see "build_usb.sh" above), but the script's actual
-  `vnconfig`/`mount`/`sed`-in-place mechanics are untested on a real
-  OpenBSD host, and the exact in-tree path to `bsd.rd` was never
-  confirmed (mitigated with `find` + a hard-fail guard, not a known
-  answer). Validate the same way `build.sh` was: run it, then boot the
-  resulting `.img` (or a `dd`'d USB stick) in a VM.
+- `build_usb.sh` has been run once on a real OpenBSD host, far enough
+  to reach the `find`/sets-directory logic and surface that
+  `install79.img` carries bsd.rd twice (`/bsd.rd` and
+  `/${RELEASE}/${ARCH}/bsd.rd`), not once as originally assumed -- the
+  script's initial "exactly one" hard-fail caught this instead of
+  silently guessing. Fixed by patching every `bsd.rd` found rather than
+  requiring exactly one (see "build_usb.sh" above). **Still not
+  validated:** a full run past that point -- the patch loop itself,
+  SHA256 regeneration, and finalizing the image -- plus actually
+  booting the resulting `.img` (or a `dd`'d USB stick) and confirming
+  autoinstall completes.
