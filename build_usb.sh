@@ -61,13 +61,23 @@
 #      build.sh's ISO builds use -- one shared sequence across both
 #      artifact types).
 #
-# UNVALIDATED: this script has only been run far enough on a real
-# OpenBSD host to confirm the install79.img partition/file layout
-# above (which is how the bsd.rd-in-two-places fact was found in the
-# first place). The DEFAULTSETS patch's anchor/replacement are
-# confirmed by direct inspection of a real downloaded bsd.rd and
-# tested in isolation (see build.sh's header), but this script's own
-# mount-and-sed-in-place mechanics are untested on a real host.
+# Real-build history: a real run of this script (on the install79.img
+# partition/file layout above -- that's how the bsd.rd-in-two-places
+# fact was found) caught a real bug in the DEFAULTSETS patch's
+# precondition check: it originally matched any line starting with
+# "DEFAULTSETS=", but install.sub also has a
+# `DEFAULTSETS=$(rmel $_f $DEFAULTSETS)` reassignment (set-picker
+# toggle logic) that starts the same way but isn't one of the two
+# initial definitions being targeted -- it failed with "expected
+# exactly 2, found 3". Fixed by requiring the line to *also* end with
+# the literal `$SETS"` the substitution actually targets. See build.sh's
+# header for the full DEFAULTSETS patch explanation and how the fix was
+# re-verified.
+#
+# UNVALIDATED past that point: a full run through the (now-fixed)
+# patch loop, SHA256 regeneration, and finalizing the image, plus
+# actually booting the result and confirming the site set shows
+# pre-selected.
 
 set -e
 BUILD_DIR=`pwd`
@@ -172,15 +182,23 @@ for BSDRD; do
 		echo "build_usb.sh: ${RDSUB} not found -- can't patch install.sub" >&2
 		exit 1
 	}
-	d_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=' "${RDSUB}")
+	# Match only lines that both start with DEFAULTSETS= *and* end with
+	# the literal `$SETS"` our substitution below targets -- install.sub
+	# also has a `DEFAULTSETS=$(rmel $_f $DEFAULTSETS)` reassignment
+	# (set-picker toggle logic, confirmed against a real bsd.rd) that
+	# starts with "DEFAULTSETS=" too but isn't one of the two initial
+	# definitions we want; a looser prefix-only anchor miscounts it as a
+	# 3rd match and aborts here even though the substitution itself would
+	# have left it untouched (it doesn't end in `$SETS"`).
+	d_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=.*\$SETS"$' "${RDSUB}")
 	if [ "${d_count}" -ne 2 ]; then
-		echo "build_usb.sh: expected exactly 2 DEFAULTSETS= lines in install.sub, found ${d_count}." >&2
+		echo "build_usb.sh: expected exactly 2 DEFAULTSETS=...\$SETS\" lines in install.sub, found ${d_count}." >&2
 		echo "build_usb.sh: this OpenBSD release's install.sub wording has likely drifted --" >&2
 		echo "build_usb.sh: update the sed pattern in build_usb.sh to match it. Aborting rather" >&2
 		echo "build_usb.sh: than silently shipping without the site set pre-selected." >&2
 		exit 1
 	fi
-	sed '/^[[:blank:]]*DEFAULTSETS=/s/\$SETS"$/$SETS site$VERSION.tgz"/' "${RDSUB}" > "${RDSUB}.new"
+	sed '/^[[:blank:]]*DEFAULTSETS=.*\$SETS"$/s/\$SETS"$/$SETS site$VERSION.tgz"/' "${RDSUB}" > "${RDSUB}.new"
 	new_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=.*site\$VERSION\.tgz"$' "${RDSUB}.new")
 	if [ "${new_count}" -ne 2 ]; then
 		echo "build_usb.sh: install.sub patch did not apply as expected -- aborting" >&2

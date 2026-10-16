@@ -69,13 +69,18 @@
 #     (amd64/arm64); adjust the mkhybrid line if targeting others.
 #   - mkhybrid's -V (Volume ID) is capped at 32 characters -- keep it
 #     short if RELEASE/ARCH strings grow.
-#   - The install.sub DEFAULTSETS patch (step 4) has its anchor and
-#     replacement confirmed by direct inspection of a real downloaded
-#     bsd.rd and tested in isolation against a synthetic copy of the
-#     real DEFAULTSETS/ALLSETS lines (including realistic tab
-#     indentation on the SMP branch) -- but the actual
-#     mount-and-sed-in-place mechanics in this script, on a real
-#     OpenBSD host, are untested since the autoinstall removal.
+#   - The install.sub DEFAULTSETS patch (step 4)'s precondition check
+#     originally just matched any line starting with "DEFAULTSETS=".
+#     A real build_usb.sh run (same install.sub) hit "expected exactly
+#     2, found 3": install.sub also has a
+#     `DEFAULTSETS=$(rmel $_f $DEFAULTSETS)` reassignment (set-picker
+#     toggle logic) that starts the same way but isn't one of the two
+#     initial definitions being targeted. Fixed by requiring the line
+#     to *also* end with the literal `$SETS"` the substitution actually
+#     targets -- re-tested against a synthetic file containing all 4
+#     real DEFAULTSETS-related lines (the two real targets, the `rmel`
+#     reassignment, and a third `$UPGRADE_BSDRD && DEFAULTSETS=` form)
+#     to confirm exactly 2 match now.
 
 set -e
 BUILD_DIR=`pwd`
@@ -166,15 +171,23 @@ RDSUB="${WORK}/rd-mnt/install.sub"
 	echo "build.sh: ${RDSUB} not found -- can't patch install.sub" >&2
 	exit 1
 }
-d_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=' "${RDSUB}")
+# Match only lines that both start with DEFAULTSETS= *and* end with
+# the literal `$SETS"` our substitution below targets -- install.sub
+# also has a `DEFAULTSETS=$(rmel $_f $DEFAULTSETS)` reassignment
+# (set-picker toggle logic, confirmed against a real bsd.rd) that
+# starts with "DEFAULTSETS=" too but isn't one of the two initial
+# definitions we want; a looser prefix-only anchor miscounts it as a
+# 3rd match and aborts here even though the substitution itself would
+# have left it untouched (it doesn't end in `$SETS"`).
+d_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=.*\$SETS"$' "${RDSUB}")
 if [ "${d_count}" -ne 2 ]; then
-	echo "build.sh: expected exactly 2 DEFAULTSETS= lines in install.sub, found ${d_count}." >&2
+	echo "build.sh: expected exactly 2 DEFAULTSETS=...\$SETS\" lines in install.sub, found ${d_count}." >&2
 	echo "build.sh: this OpenBSD release's install.sub wording has likely drifted --" >&2
 	echo "build.sh: update the sed pattern in build.sh to match it. Aborting rather" >&2
 	echo "build.sh: than silently shipping without the site set pre-selected." >&2
 	exit 1
 fi
-sed '/^[[:blank:]]*DEFAULTSETS=/s/\$SETS"$/$SETS site$VERSION.tgz"/' "${RDSUB}" > "${RDSUB}.new"
+sed '/^[[:blank:]]*DEFAULTSETS=.*\$SETS"$/s/\$SETS"$/$SETS site$VERSION.tgz"/' "${RDSUB}" > "${RDSUB}.new"
 new_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=.*site\$VERSION\.tgz"$' "${RDSUB}.new")
 if [ "${new_count}" -ne 2 ]; then
 	echo "build.sh: install.sub patch did not apply as expected -- aborting" >&2

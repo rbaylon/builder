@@ -177,24 +177,24 @@ Consequences for the script, vs. `build.sh`:
   characters; and a fresh `${BUILD_DIR}` needs its leftover
   mounts/`vnd1` cleared before `rm -rf`, in case a previous run was
   interrupted mid-mount.
-- **The DEFAULTSETS patch (both scripts) is new and unvalidated as a
-  real code path.** Its anchor (`^[[:blank:]]*DEFAULTSETS=`) and
-  replacement (appending `site$VERSION.tgz` before the closing quote)
-  were confirmed two ways: (1) the exact real `install.sub` text --
-  `DEFAULTSETS=`/`ALLSETS=`/`SANESETS=` definitions, the
-  `if ((NCPU > 1))` branch, and `select_sets()`/`install_files()`'s
-  pre-selection logic -- was found by downloading a real `bsd.rd` and
-  grepping its decompressed text; (2) the sed command itself was run
-  against a synthetic file reproducing those exact lines, including
-  realistic tab indentation on the SMP branch (this specifically
-  caught that a naive `^DEFAULTSETS=` anchor, with no leading-whitespace
-  tolerance, misses the tab-indented second line). What's NOT
-  validated: actually mounting a real `bsd.rd`'s ramdisk on an OpenBSD
-  host and running this sed-in-place, and booting the result to
-  confirm the site set really shows `[X]` on the set-picker screen.
-- `build_usb.sh` has only been run far enough on a real OpenBSD host to
-  confirm `install79.img`'s partition/file layout (that's how the
-  bsd.rd-in-two-places fact was found). Validate by running it, then
-  booting the resulting `.img` (or a `dd`'d USB stick) in a VM and
-  confirming the custom site set shows pre-selected during a normal
-  interactive install.
+- **The DEFAULTSETS patch's precondition check was too loose, caught by
+  a real `build_usb.sh` run** (not just synthetic testing): it failed
+  with "expected exactly 2 DEFAULTSETS= lines, found 3". The anchor
+  `^[[:blank:]]*DEFAULTSETS=` matched any line starting with that text
+  -- including `DEFAULTSETS=$(rmel $_f $DEFAULTSETS)`, a reassignment
+  inside the set-picker's toggle logic, not one of the two initial
+  definitions being targeted. Fixed by requiring the matched line to
+  *also* end with the literal `$SETS"` the substitution actually
+  targets (`^[[:blank:]]*DEFAULTSETS=.*\$SETS"$`), applied to both the
+  precondition count and the sed address itself. Re-verified against a
+  synthetic file containing all 4 real DEFAULTSETS-related lines (the
+  two real targets, the `rmel` reassignment, and a third
+  `$UPGRADE_BSDRD && DEFAULTSETS=` form) -- exactly 2 match now. What's
+  still NOT validated: a full run past this point (both scripts), and
+  booting a result to confirm the site set really shows `[X]` on the
+  set-picker screen.
+- `build_usb.sh` has been run far enough on a real OpenBSD host to
+  confirm `install79.img`'s partition/file layout and to hit (and fix)
+  the DEFAULTSETS bug above. Not yet validated: a full run past the
+  patch loop -- SHA256 regen, finalizing the image -- and booting the
+  resulting `.img` (or a `dd`'d USB stick) to confirm it works.
