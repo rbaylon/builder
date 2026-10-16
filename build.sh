@@ -1,5 +1,23 @@
 #!/bin/sh
-# Builds a self-contained, autoinstall-capable OpenBSD install ISO.
+# Builds a self-contained OpenBSD install ISO carrying a custom site
+# set -- NOT an autoinstall/unattended image. This boots to the
+# standard interactive installer; the custom site${RELEASE_SHORT}.tgz
+# set shows up *pre-selected* ("[X]") on the set-picker screen (see
+# step 4 below) -- still a normal, de-selectable checkbox, just
+# checked by default instead of requiring the installer to type
+# "+site${RELEASE_SHORT}.tgz" by hand. install.site runs automatically
+# once the set is selected and extracted (install.site(5)), same as
+# any other site set.
+#
+# Previously this also embedded an autoinstall response file and
+# patched bsd.rd's /.profile for an unattended countdown + a
+# media-removal prompt before reboot; that's been removed entirely
+# (see git history to bring it back). install.conf/install.conf.usb
+# and their .example templates are unused leftovers from that and can
+# be deleted if autoinstall isn't coming back. The remaining
+# install.sub patch (step 4) is new and unrelated to that -- it only
+# changes the set-picker's default selection, not installer behavior
+# otherwise.
 #
 # Runs locally, directly on an OpenBSD host, as root: it needs
 # rdsetroot(8) (patches bsd.rd's ramdisk), vnconfig(8) + mount (to
@@ -12,77 +30,52 @@
 #   3. Tar up site/ into site${RELEASE_SHORT}.tgz and drop it next to
 #      the standard sets (under RELEASE/ARCH, e.g. 7.9/amd64 -- the
 #      on-disc dir uses the full release string, not RELEASE_SHORT).
-#   4. Patch bsd.rd (via rdsetroot) to carry install.conf as
-#      /auto_install.conf, so booting and choosing (A)utoinstall needs
-#      no network. bsd.rd ships gzip-compressed on the media, so it's
-#      gunzipped first and re-gzipped after patching.
-#   5. While the ramdisk is mounted, also patch two of its scripts with
-#      sed, anchored on literal strings confirmed against a real
-#      install79.iso's bsd.rd for 7.9/amd64 (downloaded and inspected
-#      directly -- see "Known things to check" below for how):
-#        - /.profile: when /auto_install.conf is present (our case) or
-#          the box netbooted, .profile prints "Starting non-interactive
-#          mode in ${TIMEOUT_PERIOD_SEC} seconds...", starts a
-#          background `sleep $TIMEOUT_PERIOD_SEC && kill $$` watchdog,
-#          and the "(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?"
-#          read defaults to (A) once that watchdog fires.
-#          TIMEOUT_PERIOD_SEC=5 is changed to 1 here. (install.sub
-#          itself has no such countdown -- the wait happens entirely in
-#          .profile, before install.sub is ever reached.)
-#        - /install.sub: a pause-or-read prompt is inserted to remove
-#          the install media right before do_autoinstall()'s `exec
-#          reboot`, since unattended autoinstall otherwise reboots
-#          straight back into the same CD with zero chance to pull it.
-#      Both patches hard-fail the build if their anchors don't match
-#      exactly once, so a future OpenBSD release that reworded either
-#      script can't silently ship without this behavior.
-#   6. Regenerate SHA256 for that set directory, after bsd.rd is
+#   4. bsd.rd ships gzip-compressed on the install media (the
+#      bootloader inflates it at boot time); gunzip it, extract its
+#      ramdisk image with rdsetroot -x, mount it, and sed-patch
+#      install.sub: append "site$VERSION.tgz" (expands at install time
+#      to exactly our site set's filename) onto both of its
+#      DEFAULTSETS definitions (uniprocessor and SMP/bsd.mp) --
+#      confirmed directly against a real bsd.rd that this is what
+#      controls the set-picker's starting "[X]"/"[ ]" state; a site
+#      set is already *offered* ($ALLSETS always includes it) but never
+#      pre-selected otherwise. Hard-fails if it doesn't find exactly 2
+#      DEFAULTSETS= lines before patching, or exactly 2 patched ones
+#      after, rather than silently shipping unpatched. Unmount, write
+#      the ramdisk back with rdsetroot, re-gzip it back to bsd.rd.
+#   5. Regenerate SHA256 for that set directory, after bsd.rd is
 #      patched (unsigned -- there's no signify key for this custom
-#      build, so install.conf must answer "yes" to the resulting
-#      "continue without verification?" prompt).
-#   7. Repack everything with mkhybrid using the same flags OpenBSD's
+#      build, so the installer will ask "Directory does not contain
+#      SHA256.sig. Continue without verification?" -- answer yes by
+#      hand when prompted).
+#   6. Repack everything with mkhybrid using the same flags OpenBSD's
 #      own release build uses (distrib/${ARCH}/iso/Makefile).
 #
-# VALIDATED on a real OpenBSD 7.9/amd64 host: the script runs
-# end-to-end and produces a structurally correct ISO (site set present,
-# bsd.rd correctly re-gzipped, SHA256 matches the patched files, and
-# the embedded auto_install.conf is byte-identical to the source
-# install.conf). Also boot-tested: reached the "(I)nstall, (U)pgrade,
-# (A)utoinstall or (S)hell?" menu, which caught a real bug (now fixed):
-# the .profile/install.sub sed patches used to `mv` a freshly-sed'd
-# file over the original, which silently replaced install.sub's inode
-# -- and with it, its executable bit -- breaking /autoinstall,
-# /install, /upgrade (symlinks to install.sub) with "cannot execute:
-# Permission denied". Fixed by `cat`-ing the patched content into the
-# existing file instead. NOT yet validated past that menu: whether
-# (A)utoinstall itself fires and completes unattended -- do that next,
-# before trusting a build fully. Background:
-#   - autoinstall(8), rdsetroot(8), install.site(5)
+# VALIDATED on a real OpenBSD 7.9/amd64 host (before the autoinstall
+# removal above): the script ran end-to-end and produced a
+# structurally correct, boot-tested ISO. Background:
+#   - install.site(5)
 #   - https://www.openbsd.org/faq/faq4.html
 #   - https://github.com/openbsd/src/blob/master/distrib/amd64/iso/Makefile
-#   - https://github.com/tbaumgard/openbsd-custom-image
 #
 # Known things to check on first run:
 #   - vnd1 is assumed free; `vnconfig -l` if it's already in use.
 #   - `mkhybrid` must be on PATH (it ships in base as part of
 #     gnu/usr.sbin/mkhybrid); if missing, build it from src.git.
 #   - rdsetroot has a fixed reserved-space budget inside bsd.rd
-#     (`rdsetroot -s bsd.rd`); a large install.conf could in theory not
-#     fit, though this is unlikely in practice.
+#     (`rdsetroot -s bsd.rd`); the DEFAULTSETS patch only adds ~15
+#     bytes per line, so this is extremely unlikely to matter.
 #   - EFI boot (-e eficdboot) only applies on arches that ship it
 #     (amd64/arm64); adjust the mkhybrid line if targeting others.
 #   - mkhybrid's -V (Volume ID) is capped at 32 characters -- keep it
 #     short if RELEASE/ARCH strings grow.
-#   - The .profile/install.sub sed patches (step 5) have their anchor
-#     strings confirmed byte-exact against the real target release:
-#     `curl`'d install79.iso's bsd.rd directly from the mirror,
-#     `gzip -dc`'d it (no rdsetroot/vnconfig needed just to read text --
-#     the ramdisk's raw FFS blocks sit undecoded but still grep-able
-#     inside the decompressed ELF), and grepped the result. The actual
-#     mount-and-sed-in-place mechanics (this script's real code path)
-#     are still unvalidated on a real OpenBSD host -- if RELEASE/ARCH
-#     changes, re-run that same curl+gzip+grep check against the new
-#     bsd.rd before trusting the anchors still match.
+#   - The install.sub DEFAULTSETS patch (step 4) has its anchor and
+#     replacement confirmed by direct inspection of a real downloaded
+#     bsd.rd and tested in isolation against a synthetic copy of the
+#     real DEFAULTSETS/ALLSETS lines (including realistic tab
+#     indentation on the SMP branch) -- but the actual
+#     mount-and-sed-in-place mechanics in this script, on a real
+#     OpenBSD host, are untested since the autoinstall removal.
 
 set -e
 BUILD_DIR=`pwd`
@@ -96,13 +89,7 @@ if [ -f ./config.local.sh ]; then
 fi
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "build.sh: must run as root (needs vnconfig/mount/rdsetroot)" >&2
-	exit 1
-fi
-
-if [ ! -f ./install.conf ]; then
-	echo "install.conf not found. Copy install.conf.example to" >&2
-	echo "install.conf and edit it for your target system." >&2
+	echo "build.sh: must run as root (needs vnconfig/mount)" >&2
 	exit 1
 fi
 
@@ -157,97 +144,47 @@ if [ -f "${SITEDIR}/install.site" ]; then
 fi
 ( cd "${SITEDIR}" && tar -czphf "${SETDIR}/${SITETGZ}" . )
 
-echo "==> Patching bsd.rd with embedded auto_install.conf"
+echo "==> Patching install.sub so the custom site set is pre-selected by default"
+# Confirmed directly against a real bsd.rd: the installer's set-picker
+# only pre-checks ("[X]") entries in install.sub's $DEFAULTSETS -- a
+# site set is already *offered* (it's in $ALLSETS unconditionally) but
+# never pre-selected. This appends "site$VERSION.tgz" (expands at
+# install time to exactly our site${RELEASE_SHORT}.tgz filename) onto
+# both of install.sub's DEFAULTSETS definitions (uniprocessor and
+# SMP/bsd.mp), mirroring how $ALLSETS already includes it. The
+# installer still shows it as a normal, de-selectable checkbox -- this
+# only changes its starting state.
 BSDRD="${SETDIR}/bsd.rd"
-cp "${REPO_DIR}/install.conf" "${WORK}/auto_install.conf"
-# bsd.rd ships gzip-compressed on the install media (the bootloader
-# inflates it at boot time); rdsetroot needs the raw ELF underneath.
 gzip -dc "${BSDRD}" > "${WORK}/bsd.rd"
 rdsetroot -x "${WORK}/bsd.rd" "${WORK}/ramdisk.fs"
 vnconfig vnd1 "${WORK}/ramdisk.fs"
 mkdir -p "${WORK}/rd-mnt"
 mount /dev/vnd1a "${WORK}/rd-mnt"
-cp "${WORK}/auto_install.conf" "${WORK}/rd-mnt/auto_install.conf"
 
-echo "==> Patching .profile's menu countdown (TIMEOUT_PERIOD_SEC 5 -> 1)"
-# The real autoinstall countdown lives in the ramdisk's /.profile, not
-# install.sub: when /auto_install.conf is present (our case) or the
-# box netbooted, .profile prints "Starting non-interactive mode in
-# ${TIMEOUT_PERIOD_SEC} seconds...", starts a background `sleep
-# $TIMEOUT_PERIOD_SEC && kill $$` watchdog, and the
-# "(I)nstall, (U)pgrade, (A)utoinstall or (S)hell?" read defaults to
-# (A) when that watchdog fires. TIMEOUT_PERIOD_SEC=5 is the "5 seconds"
-# being reduced here.
-RDPROFILE="${WORK}/rd-mnt/.profile"
-[ -f "${RDPROFILE}" ] || {
-	echo "build.sh: ${RDPROFILE} not found -- can't patch .profile" >&2
-	exit 1
-}
-t_count=$(grep -c '^TIMEOUT_PERIOD_SEC=5$' "${RDPROFILE}")
-if [ "${t_count}" -ne 1 ]; then
-	echo "build.sh: .profile's 'TIMEOUT_PERIOD_SEC=5' not found exactly once (got ${t_count})." >&2
-	echo "build.sh: this OpenBSD release's .profile has likely changed -- update the sed" >&2
-	echo "build.sh: pattern in build.sh. Aborting rather than silently keeping the 5s wait." >&2
-	exit 1
-fi
-sed 's/^TIMEOUT_PERIOD_SEC=5$/TIMEOUT_PERIOD_SEC=1/' "${RDPROFILE}" > "${RDPROFILE}.new"
-grep -q '^TIMEOUT_PERIOD_SEC=1$' "${RDPROFILE}.new" || {
-	echo "build.sh: .profile patch did not apply as expected -- aborting" >&2
-	rm -f "${RDPROFILE}.new"
-	exit 1
-}
-# cat into the existing file rather than `mv`-ing over it: mv would
-# replace .profile's inode with a freshly-created one at default
-# (umask) permissions. Harmless for .profile itself (it's sourced, not
-# exec'd) but the same pattern below patches install.sub, which IS
-# exec'd via /autoinstall, /install, /upgrade -- so both are written
-# this way for consistency and to avoid the mistake spreading.
-cat "${RDPROFILE}.new" > "${RDPROFILE}"
-rm -f "${RDPROFILE}.new"
-
-echo "==> Patching install.sub with a media-removal prompt before reboot"
 RDSUB="${WORK}/rd-mnt/install.sub"
 [ -f "${RDSUB}" ] || {
 	echo "build.sh: ${RDSUB} not found -- can't patch install.sub" >&2
 	exit 1
 }
-
-# Anchor: the prep_root_mail call site for the autoinstall log, right
-# before do_autoinstall()'s `exec reboot`. Matched on the /tmp/ai/ai
-# path (escaped) so it can't match the prep_root_mail() definition
-# itself, or the unrelated prep_root_mail call in the interactive
-# install/upgrade path (which logs to /tmp/i/$MODE.resp, not
-# /tmp/ai/ai.log).
-a_count=$(grep -c 'prep_root_mail /tmp/ai/ai' "${RDSUB}")
-if [ "${a_count}" -ne 1 ]; then
-	echo "build.sh: install.sub anchor not found exactly once (got ${a_count})." >&2
+d_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=' "${RDSUB}")
+if [ "${d_count}" -ne 2 ]; then
+	echo "build.sh: expected exactly 2 DEFAULTSETS= lines in install.sub, found ${d_count}." >&2
 	echo "build.sh: this OpenBSD release's install.sub wording has likely drifted --" >&2
 	echo "build.sh: update the sed pattern in build.sh to match it. Aborting rather" >&2
-	echo "build.sh: than silently shipping an ISO without the media-removal prompt." >&2
+	echo "build.sh: than silently shipping without the site set pre-selected." >&2
 	exit 1
 fi
-
-sed '
-/prep_root_mail \/tmp\/ai\/ai/a\
-echo\
-echo "Autoinstall finished. Remove the installation media, then press ENTER/RETURN to reboot."\
-if command -v pause >/dev/null 2>&1; then\
-	pause\
-else\
-	read _removed\
-fi
-' "${RDSUB}" > "${RDSUB}.new"
-
-grep -q 'Autoinstall finished. Remove the installation media' "${RDSUB}.new" || {
+sed '/^[[:blank:]]*DEFAULTSETS=/s/\$SETS"$/$SETS site$VERSION.tgz"/' "${RDSUB}" > "${RDSUB}.new"
+new_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=.*site\$VERSION\.tgz"$' "${RDSUB}.new")
+if [ "${new_count}" -ne 2 ]; then
 	echo "build.sh: install.sub patch did not apply as expected -- aborting" >&2
 	rm -f "${RDSUB}.new"
 	exit 1
-}
+fi
 # cat into the existing file, NOT `mv` over it: install.sub needs to
 # stay executable (/autoinstall, /install, /upgrade are symlinks to
-# it), and `mv` would swap in a freshly-created file at default umask
-# permissions (no exec bit), breaking all three with "cannot execute:
-# Permission denied" at the boot menu -- confirmed by an actual test
+# it); `mv` would swap in a freshly-created file at default umask
+# permissions (no exec bit) -- a real bug caught by an earlier test
 # boot. cat preserves the original inode (and its mode/owner),
 # overwriting only its content.
 cat "${RDSUB}.new" > "${RDSUB}"

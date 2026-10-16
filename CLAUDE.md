@@ -4,17 +4,29 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this project is
 
-Builds a custom, self-contained OpenBSD install image that
-autoinstalls unattended: a custom `siteXX.tgz` file set (arbitrary
-files/scripts overlaid onto the target root filesystem, plus an
-optional `install.site` post-install hook) and an autoinstall response
-file, both embedded directly in the image so no network is needed at
-boot. Two scripts produce two artifact types from the same `site/`:
-`build.sh` makes an ISO (for CD/virtual-media boot), `build_usb.sh`
-makes a raw USB disk image (for `dd`'ing onto a flash drive). They
-share `config.sh`/`site/`/`version.sh` but need separate response
-files (`install.conf` vs `install.conf.usb`) -- see "build_usb.sh" below
-for why.
+Builds a custom, self-contained OpenBSD install image carrying your
+own `siteXX.tgz` file set (arbitrary files/scripts overlaid onto the
+target root filesystem, plus an optional `install.site` post-install
+hook). Two scripts produce two artifact types from the same `site/`:
+`build.sh` makes an ISO, `build_usb.sh` makes a raw USB disk image
+(for `dd`'ing onto a flash drive).
+
+**Not autoinstall/unattended.** Both images boot to OpenBSD's standard
+interactive installer -- hostname, passwords, disk layout, etc. are
+still all typed in by hand. This project used to also embed an
+autoinstall response file and patch `bsd.rd` for unattended installs --
+that was removed entirely (see git history, commit around "not use
+auto install at all", to resurrect it). `install.conf`,
+`install.conf.usb`, and their `.example` templates are unused
+leftovers from that removed feature; delete them if autoinstall isn't
+coming back.
+
+**The custom site set IS pre-selected**, though: both scripts patch
+`install.sub` so `site${RELEASE_SHORT}.tgz` shows up checked (`[X]`)
+by default on the installer's set-picker screen, instead of requiring
+`+site${RELEASE_SHORT}.tgz` typed by hand -- see "The DEFAULTSETS
+patch" below for the mechanism. It's still a normal, de-selectable
+checkbox; this only changes its starting state.
 
 Default target is OpenBSD 7.9 / amd64, controlled by `config.sh`.
 
@@ -40,22 +52,14 @@ actually running it on an OpenBSD host, not just read for plausibility.
 ## Commands
 
 ```sh
-# One-time setup
-cp install.conf.example install.conf           # for build.sh (ISO)
-cp install.conf.usb.example install.conf.usb   # for build_usb.sh (USB)
-# edit both: hostname/ssh key/timezone, and the USB one's disk names
-
-# Build an ISO (fetches the install ISO, embeds site/ + install.conf,
-# repacks it, and writes the result to out/)
-doas ./build.sh
-
-# Build a USB image (fetches install.img, embeds site/ +
-# install.conf.usb, edits it in place, and writes the result to out/)
-doas ./build_usb.sh
+doas ./build.sh        # build an ISO, written to out/
+doas ./build_usb.sh    # build a USB image, written to out/
 ```
 
-There is no lint/test suite -- correctness is verified by booting the
-resulting ISO/image in a VM and confirming autoinstall completes.
+No setup beyond having `site/` the way you want it -- there's no
+`install.conf` to copy/edit anymore. There is no lint/test suite --
+correctness is verified by booting the resulting ISO/image in a VM and
+confirming it installs with the custom site set selectable.
 
 ## Architecture / data flow
 
@@ -63,10 +67,9 @@ resulting ISO/image in a VM and confirming autoinstall completes.
 site/                 -> tar'd as-is into site${RELEASE_SHORT}.tgz
                           (root-relative: site/etc/foo -> /etc/foo on target)
 site/install.site      -> if present & executable, run chroot()'d into the
-                          target after all sets extract (install.site(5))
-install.conf           -> answers to installer prompts (autoinstall(8)),
-                          embedded into bsd.rd's ramdisk as /auto_install.conf
-                          via rdsetroot, so (A)utoinstall needs no DHCP/HTTP
+                          target after the site set is selected and
+                          extracted during a normal interactive install
+                          (install.site(5))
 ```
 
 `build.sh` does, in order, all on the local OpenBSD host:
@@ -75,52 +78,45 @@ install.conf           -> answers to installer prompts (autoinstall(8)),
 2. Mount it (`vnconfig` + `mount -t cd9660`) and copy its contents out
    with `pax`.
 3. Tar `site/` into `site${RELEASE_SHORT}.tgz`, dropped next to the
-   standard sets in `<RELEASE>/<ARCH>/` on the extracted tree (the ISO's
-   on-disc directory uses the full release string, e.g. `7.9/amd64`,
-   not the short form used for filenames like `install79.iso`).
-4. Regenerate `SHA256` for that set directory (unsigned -- there's no
-   `signify` key for this custom build, so `install.conf` must answer
-   "yes" to the resulting "continue without verification?" prompt).
-5. `bsd.rd` ships gzip-compressed on the install media (the bootloader
-   inflates it at boot); gunzip it, extract its ramdisk image with
-   `rdsetroot -x`, mount it, drop in `install.conf` as
-   `/auto_install.conf`, and while still mounted, sed-patch two of its
-   scripts:
-   - `/.profile`: this is where the *real* autoinstall countdown lives
-     (not `install.sub`). When `/auto_install.conf` is present (our
-     case) or the box netbooted, `.profile` prints "Starting
-     non-interactive mode in `${TIMEOUT_PERIOD_SEC}` seconds...",
-     starts a background `sleep $TIMEOUT_PERIOD_SEC && kill $$`
-     watchdog, and the `(I)/(U)/(A)/(S)` menu `read` defaults to `(A)`
-     once that watchdog fires. `build.sh` changes
-     `TIMEOUT_PERIOD_SEC=5` to `=1`.
-   - `/install.sub`: adds a pause-or-read (`command -v pause`, else
-     `read`) prompt to remove the install media right before
-     `do_autoinstall()`'s `exec reboot` -- stock install.sub reboots
-     straight back into the same CD with no such prompt.
-
-   Both anchors are confirmed byte-exact against the real
-   `install79.iso`'s `bsd.rd` (downloaded and grepped directly -- see
-   "Known gaps" below), and each must match exactly once or the build
-   aborts rather than silently shipping without this behavior. Unmount,
-   write the ramdisk back with `rdsetroot`, then re-gzip it back to
-   `bsd.rd`. (`bsd`/`bsd.mp` are plain ELF, not compressed -- only
-   `bsd.rd` needs this.) SHA256 is regenerated *after* this step, not
-   before, since it must hash the final patched `bsd.rd`.
+   standard sets in `<RELEASE>/<ARCH>/` on the extracted tree (the
+   ISO's on-disc directory uses the full release string, e.g.
+   `7.9/amd64`, not the short form used for filenames like
+   `install79.iso`). Before this, `VERSION` (via `version.sh show`) is
+   written into `site/usr/local/arkgate/RELEASE`, so the installed
+   system carries its own build version.
+4. **The DEFAULTSETS patch.** `bsd.rd` ships gzip-compressed on the
+   install media; gunzip it, extract its ramdisk image with
+   `rdsetroot -x`, mount it, and sed-patch `/install.sub`. Confirmed
+   directly against a real `bsd.rd`: the set-picker screen
+   (`select_sets()`) only pre-checks (`[X]`) entries already in
+   `install.sub`'s `$DEFAULTSETS` shell variable; a site set is always
+   *offered* (`$ALLSETS` unconditionally includes
+   `site$VERSION.tgz`, where `$VERSION` is install.sub's own runtime
+   variable for the release, e.g. `79`) but is never pre-selected on
+   its own. The patch appends literal text `site$VERSION.tgz` onto
+   both of `install.sub`'s `DEFAULTSETS=` definitions (uniprocessor
+   and SMP/`bsd.mp` -- there are two, one inside an `if ((NCPU > 1))`
+   block and tab-indented) so it matches `$ALLSETS`. Hard-fails if it
+   doesn't find exactly 2 `DEFAULTSETS=` lines before patching, or
+   exactly 2 correctly-patched ones after. Unmount, write the ramdisk
+   back with `rdsetroot`, re-gzip it back to `bsd.rd`.
+5. Regenerate `SHA256` for that set directory, after `bsd.rd` is
+   patched (unsigned -- there's no `signify` key for this custom
+   build, so the installer will ask "Directory does not contain
+   SHA256.sig. Continue without verification?" -- a human answers that
+   by hand).
 6. Repack everything with `mkhybrid`, using the same flags as
    OpenBSD's own `distrib/${ARCH}/iso/Makefile`. The output is named
    `specz-os-${RELEASE_SHORT}-v<VERSION>-<timestamp>.iso`.
 7. After mkhybrid succeeds, `version.sh bump` advances `VERSION`
    (default patch: 1.0.0 -> 1.0.1). `VERSION` holds the version the
-   *next* ISO will get, so the first build is v1.0.0. A failed build
+   *next* build will get, so the first build is v1.0.0. A failed build
    doesn't bump, so its version number is reused on retry. Use
    `sh version.sh bump minor|major` by hand to change the other parts.
 
 Config layering: `config.sh` (committed defaults: release/arch/mirror/
 build & output dirs) is sourced first, then `config.local.sh`
-(gitignored, optional) overrides it if present. `install.conf` is also
-gitignored by default since it may end up carrying host-specific or
-sensitive answers -- `install.conf.example` is the tracked template.
+(gitignored, optional) overrides it if present.
 
 ## build_usb.sh (USB image variant)
 
@@ -143,112 +139,62 @@ Consequences for the script, vs. `build.sh`:
   dir before editing -- `build.sh` can safely hardlink its ISO because
   that mount is read-only; here the mount is read-write, so a hardlink
   would corrupt the cached download for future runs.
-- Two `vnd` units are needed concurrently (`vnd1` for the outer FFS
-  partition, `vnd2` for the inner ramdisk-within-`bsd.rd`), since the
-  outer mount has to stay up for the whole script -- unlike `build.sh`,
-  where the ISO mount is long gone before `bsd.rd` gets patched.
 - `bsd.rd` exists in **two places** on the image, confirmed by an
-  actual build run: `/bsd.rd` at the FS root (what the bootloader
-  actually boots -- its hardcoded default path, needing no
-  `/etc/boot.conf` override) and `/${RELEASE}/${ARCH}/bsd.rd` (mirrors
-  the ISO's sets directory, otherwise inert). Rather than bet the
-  build on which one actually boots, `build_usb.sh` finds every
-  `bsd.rd` with `find` and patches *all* of them identically in a loop
-  -- they're the same upstream file, so the extra patch is harmless.
-  The `RELEASE`/`ARCH` copy is specifically picked out (by path) as
-  the sets directory for `site.tgz`/`SHA256`.
-- The `/.profile` and `/install.sub` sed patches are identical to
-  `build.sh`'s, since it's the same `bsd.rd` file either way. The
-  `install.sub` patch is written to a sed script file once
-  (`install_sub.sed`) rather than inlined in the loop, specifically to
-  avoid the loop's shell indentation leaking a stray leading tab onto
-  the line closing the quoted sed program -- which would land as a
-  bogus extra "command" right after the `a\` block's closing `fi`.
-
-**USB media is a disk to the installer, not a CD-ROM**, so
-`install.conf`'s `Location of sets = cdrom` doesn't apply and would
-stall autoinstall -- hence the separate `install.conf.usb`. Confirmed
-against the real `install.sub` text (`install_sets()` ->
-`install_disk()` -> `mount_mnt2()` -> `ask_which()`, whose prompt
-format is literally `"Which $name $query?"`):
-```
-Location of sets = disk
-Is the disk partition already mounted? = no
-Which disk contains the install media? = sd1
-Which sd1 partition has the install sets? = a
-```
-The partition answer (`a`) is fixed -- that's genuinely where the sets
-live, per the disklabel parse above. The disk name (`sd1`) is NOT: it
-depends on how many disks the *target* machine has, and can't be known
-in advance. `install.conf.usb.example` documents this.
+  actual build run: `/bsd.rd` at the FS root and
+  `/${RELEASE}/${ARCH}/bsd.rd` (mirrors the ISO's sets directory). The
+  `RELEASE`/`ARCH` copy's directory is located with `find` since
+  that's where `site.tgz`/`SHA256` go -- the same directory the
+  standard `*.tgz`/`SHA256`/`index.txt` already live in. **Both**
+  copies get the DEFAULTSETS patch (see `build.sh`'s step 4) in a
+  loop, rather than betting on which one actually boots -- they're the
+  same upstream file, so patching both is harmless. Two `vnd` units
+  are needed concurrently for this (`vnd1` for the outer FFS
+  partition, `vnd2` for the inner ramdisk-within-`bsd.rd`), since the
+  outer mount has to stay up for the whole script.
 
 ## Key references
 
-- [autoinstall(8)](https://man.openbsd.org/autoinstall.8) -- response
-  file format and discovery mechanism.
-- [rdsetroot(8)](https://man.openbsd.org/rdsetroot) -- embedding files
-  into the ramdisk kernel.
 - [OpenBSD FAQ 4](https://www.openbsd.org/faq/faq4.html) -- `siteXX.tgz`
   / `install.site` semantics.
+- [install.site(5)](https://man.openbsd.org/install.site.5)
 - [distrib/amd64/iso/Makefile](https://github.com/openbsd/src/blob/master/distrib/amd64/iso/Makefile)
   -- the official `mkhybrid` invocation this project's repack step mirrors.
 - [tbaumgard/openbsd-custom-image](https://github.com/tbaumgard/openbsd-custom-image)
-  -- prior art for this whole approach.
+  -- prior art this project started from (that project does autoinstall;
+  this one deliberately doesn't anymore).
 
 ## Known gaps / things to verify before trusting a build
 
-- `build.sh` has been run end-to-end on a real OpenBSD 7.9/amd64 host
-  and produces a structurally correct ISO: `site79.tgz` is present
-  next to the standard sets, `bsd.rd` is validly re-gzipped, `SHA256`
-  matches the final (patched) files, and the embedded
-  `auto_install.conf` is byte-identical to the source `install.conf`.
-  Bugs found and fixed during that run: the on-disc set directory uses
-  the full release string (`7.9/amd64`), not `RELEASE_SHORT`
-  (`79/amd64`); `pax -rw` with an absolute source path embeds the full
-  path into the destination -- must `cd` into the source dir first;
-  `bsd.rd` is gzip-compressed on the media and must be gunzipped
-  before `rdsetroot -x` and re-gzipped afterward; `mkhybrid -V` (ISO9660
-  Volume ID) is capped at 32 characters; and a fresh `${BUILD_DIR}`
-  needs its leftover mounts/`vnd1` cleared before `rm -rf`, in case a
-  previous run was interrupted mid-mount.
-- Boot-tested on real hardware: reached the `(I)nstall, (U)pgrade,
-  (A)utoinstall or (S)hell?` menu, which caught a real bug (now fixed):
-  the `.profile`/`install.sub` sed patches used to `mv` a freshly-sed'd
-  temp file over the original. `mv` replaces the target's *inode*, so
-  this silently dropped `install.sub`'s executable bit, breaking
-  `/autoinstall`, `/install`, `/upgrade` (symlinks to `install.sub`)
-  with `sh: /upgrade: cannot execute - Permission denied` right at that
-  menu. Fixed by `cat`-ing the patched content into the existing file
-  instead of replacing it, which preserves the original inode's mode.
-  **Still not validated:** whether `(A)utoinstall` itself fires and
-  completes past that menu. Exact installer prompt wording in
-  `install.conf` can drift between OpenBSD releases -- if autoinstall
-  stalls, it's waiting on a prompt whose text doesn't match; run the
-  installer interactively once against the target release to get exact
-  wording.
-- The `.profile`/`install.sub` sed patch anchors (step 5) are confirmed
-  byte-exact against the **real** target: `install79.iso`'s `bsd.rd`
-  was downloaded straight from `cdn.openbsd.org` and `gzip -dc`'d --
-  that alone is enough to grep its text, since the ramdisk's raw FFS
-  blocks sit undecoded but still readable inside the decompressed ELF
-  (no `rdsetroot`/`vnconfig`/OpenBSD host needed just to check this).
-  That's how the real countdown was found in the first place: an
-  earlier version of this patch targeted `install.sub` on the mistaken
-  assumption that's where the "5 seconds" lived; it doesn't -- `.profile`
-  owns the countdown, `install.sub` never had one. **Still not
-  validated:** the actual `vnconfig`/`mount`/`sed`-in-place mechanics
-  in `build.sh`, on a real OpenBSD host. If `RELEASE`/`ARCH` changes,
-  re-run the same curl+gzip+grep check against the new `bsd.rd` before
-  trusting the anchors still match -- `build.sh` hard-fails loudly if
-  they don't, rather than silently skipping the patch.
-- `build_usb.sh` has been run once on a real OpenBSD host, far enough
-  to reach the `find`/sets-directory logic and surface that
-  `install79.img` carries bsd.rd twice (`/bsd.rd` and
-  `/${RELEASE}/${ARCH}/bsd.rd`), not once as originally assumed -- the
-  script's initial "exactly one" hard-fail caught this instead of
-  silently guessing. Fixed by patching every `bsd.rd` found rather than
-  requiring exactly one (see "build_usb.sh" above). **Still not
-  validated:** a full run past that point -- the patch loop itself,
-  SHA256 regeneration, and finalizing the image -- plus actually
-  booting the resulting `.img` (or a `dd`'d USB stick) and confirming
-  autoinstall completes.
+- `build.sh`'s site-set/SHA256/mkhybrid pipeline was validated
+  end-to-end (including a real boot test) **before** the autoinstall
+  removal -- those parts (fetch, extract, tar site/, refresh SHA256,
+  repack) are unchanged by the removal, but haven't been re-run as the
+  current script. Known-good details from that run: the on-disc set
+  directory uses the full release string (`7.9/amd64`), not
+  `RELEASE_SHORT` (`79/amd64`); `pax -rw` with an absolute source path
+  embeds the full path into the destination -- must `cd` into the
+  source dir first; `mkhybrid -V` (ISO9660 Volume ID) is capped at 32
+  characters; and a fresh `${BUILD_DIR}` needs its leftover
+  mounts/`vnd1` cleared before `rm -rf`, in case a previous run was
+  interrupted mid-mount.
+- **The DEFAULTSETS patch (both scripts) is new and unvalidated as a
+  real code path.** Its anchor (`^[[:blank:]]*DEFAULTSETS=`) and
+  replacement (appending `site$VERSION.tgz` before the closing quote)
+  were confirmed two ways: (1) the exact real `install.sub` text --
+  `DEFAULTSETS=`/`ALLSETS=`/`SANESETS=` definitions, the
+  `if ((NCPU > 1))` branch, and `select_sets()`/`install_files()`'s
+  pre-selection logic -- was found by downloading a real `bsd.rd` and
+  grepping its decompressed text; (2) the sed command itself was run
+  against a synthetic file reproducing those exact lines, including
+  realistic tab indentation on the SMP branch (this specifically
+  caught that a naive `^DEFAULTSETS=` anchor, with no leading-whitespace
+  tolerance, misses the tab-indented second line). What's NOT
+  validated: actually mounting a real `bsd.rd`'s ramdisk on an OpenBSD
+  host and running this sed-in-place, and booting the result to
+  confirm the site set really shows `[X]` on the set-picker screen.
+- `build_usb.sh` has only been run far enough on a real OpenBSD host to
+  confirm `install79.img`'s partition/file layout (that's how the
+  bsd.rd-in-two-places fact was found). Validate by running it, then
+  booting the resulting `.img` (or a `dd`'d USB stick) in a VM and
+  confirming the custom site set shows pre-selected during a normal
+  interactive install.

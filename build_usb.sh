@@ -1,7 +1,13 @@
 #!/bin/sh
-# Builds a self-contained, autoinstall-capable OpenBSD USB install
-# image (install${RELEASE_SHORT}.img) -- the USB/disk counterpart to
-# build.sh's ISO. Run as root on an OpenBSD host, same as build.sh.
+# Builds a self-contained OpenBSD USB install image
+# (install${RELEASE_SHORT}.img) carrying a custom site set -- the
+# USB/disk counterpart to build.sh's ISO. NOT an autoinstall/
+# unattended image -- see build.sh's header for why that was removed.
+# This boots to the standard interactive installer; the custom
+# site${RELEASE_SHORT}.tgz set shows up *pre-selected* on the
+# set-picker screen (see step 4 below and build.sh's header for the
+# full explanation) -- still a normal, de-selectable checkbox, just
+# checked by default. Run as root on an OpenBSD host, same as build.sh.
 #
 # Confirmed by downloading the real install79.img straight from the
 # mirror and parsing it directly with plain Python struct code (MBR
@@ -17,31 +23,18 @@
 #     `vnconfig vndN install79.img` exposes /dev/vndNa (the FFS data)
 #     and /dev/vndNi (the ESP) directly -- no manual fdisk/disklabel
 #     step needed, unlike building the image from scratch.
-#   - bsd.rd on this image is the exact same gzip-compressed file as
-#     on the ISO (same upstream release artifact), so the
-#     .profile/install.sub sed patches from build.sh apply unchanged.
 #
 # File-level layout, CONFIRMED by an actual build run (not just the
 # partition-table parse above): install79.img carries bsd.rd in TWO
-# places -- /bsd.rd at the FS root (what the bootloader actually
-# boots) and /${RELEASE}/${ARCH}/bsd.rd (mirrors the ISO's sets
-# directory, otherwise inert). This script finds every bsd.rd with
-# `find` and patches all of them identically rather than betting on
-# which one boots -- see the inline comment where BSDRD_MATCHES is
-# computed. The RELEASE/ARCH one is specifically picked out (by path)
-# as the sets directory for site.tgz/SHA256.
-#
-# IMPORTANT difference from build.sh: USB media is a *disk* to the
-# installer, not a CD-ROM, so install.conf's "Location of sets = cdrom"
-# does not apply and would stall autoinstall. This script therefore
-# requires its own install.conf.usb (see install.conf.usb.example)
-# with "Location of sets = disk" and different follow-up questions.
-# Confirmed against the real install.sub text (install_sets() ->
-# install_disk() -> mount_mnt2() -> ask_which()): the partition answer
-# is fixed at "a" (that really is where the sets live, per the
-# disklabel parse above), but the disk device name (e.g. "sd1")
-# depends on how many disks the *target* machine has and can't be
-# known in advance -- see install.conf.usb.example.
+# places -- /bsd.rd at the FS root and /${RELEASE}/${ARCH}/bsd.rd
+# (mirrors the ISO's sets directory). The RELEASE/ARCH copy's
+# directory is located (by path, via `find`) since that's where
+# site.tgz/SHA256 go -- same directory the standard
+# *.tgz/SHA256/index.txt already live in, matching the ISO's layout.
+# Both copies get the DEFAULTSETS patch below (step 4) -- they're the
+# same upstream bsd.rd file, so patching both is harmless and avoids
+# betting on which one actually boots (see the comment above
+# BSDRD_MATCHES below).
 #
 #   1. Fetch the official install${RELEASE_SHORT}.img for RELEASE/ARCH
 #      from MIRROR, cached in BUILD_DIR. A real *copy* is made for
@@ -53,15 +46,12 @@
 #   2. vnconfig it and mount its 'a' partition (FFS) read-write.
 #   3. find every bsd.rd on it (there are two -- see above); tar site/
 #      into site${RELEASE_SHORT}.tgz next to the RELEASE/ARCH one.
-#   4. Patch each bsd.rd found, exactly like build.sh does: gunzip,
+#   4. Patch each bsd.rd found exactly like build.sh does: gunzip,
 #      rdsetroot -x, mount the inner ramdisk -- on a *second* vnd unit,
 #      since the outer 'a' partition mount has to stay up throughout
-#      this whole script, unlike build.sh where the ISO mount is long
-#      gone by the time bsd.rd gets patched -- embed install.conf.usb
-#      as /auto_install.conf, sed-patch /.profile (TIMEOUT_PERIOD_SEC
-#      5->1) and /install.sub (media-removal pause before reboot),
-#      unmount, rdsetroot the ramdisk back in, re-gzip straight back
-#      onto that copy's bsd.rd.
+#      this whole script -- sed-patch install.sub's two DEFAULTSETS
+#      definitions to pre-select the site set, unmount, rdsetroot the
+#      ramdisk back in, re-gzip straight back onto that copy's bsd.rd.
 #   5. Regenerate SHA256 in the RELEASE/ARCH sets directory.
 #   6. Unmount/release both vnd units. The edited working copy of
 #      install79.img *is* the final image now -- there's no repack
@@ -71,11 +61,13 @@
 #      build.sh's ISO builds use -- one shared sequence across both
 #      artifact types).
 #
-# UNVALIDATED: this script has not been run on a real OpenBSD host.
-# The partition/disklabel facts above come from directly parsing the
-# real downloaded install79.img; the actual vnconfig/mount/sed
-# mechanics in this script are new and untested, the same caveat
-# build.sh carried before its own first real run.
+# UNVALIDATED: this script has only been run far enough on a real
+# OpenBSD host to confirm the install79.img partition/file layout
+# above (which is how the bsd.rd-in-two-places fact was found in the
+# first place). The DEFAULTSETS patch's anchor/replacement are
+# confirmed by direct inspection of a real downloaded bsd.rd and
+# tested in isolation (see build.sh's header), but this script's own
+# mount-and-sed-in-place mechanics are untested on a real host.
 
 set -e
 BUILD_DIR=`pwd`
@@ -89,15 +81,7 @@ if [ -f ./config.local.sh ]; then
 fi
 
 if [ "$(id -u)" -ne 0 ]; then
-	echo "build_usb.sh: must run as root (needs vnconfig/mount/rdsetroot)" >&2
-	exit 1
-fi
-
-if [ ! -f ./install.conf.usb ]; then
-	echo "install.conf.usb not found. Copy install.conf.usb.example to" >&2
-	echo "install.conf.usb and edit it for your target system. It's" >&2
-	echo "separate from install.conf because USB media needs different" >&2
-	echo "'Location of sets' answers than the ISO does." >&2
+	echo "build_usb.sh: must run as root (needs vnconfig/mount)" >&2
 	exit 1
 fi
 
@@ -132,16 +116,8 @@ vnconfig vnd1 "${WORK}/install.img"
 mkdir -p "${WORK}/fs-mnt"
 mount /dev/vnd1a "${WORK}/fs-mnt"
 
-# A real install79.img carries bsd.rd in TWO places (confirmed by an
-# actual build: /bsd.rd at the FS root AND /${RELEASE}/${ARCH}/bsd.rd),
-# not one -- root is what the bootloader actually boots (its
-# hardcoded default path, with no /etc/boot.conf override needed; the
-# bootloader binary's own embedded strings reference "bsd.rd" at the
-# top level), while the RELEASE/ARCH copy just mirrors the ISO's sets
-# directory layout and is otherwise inert. Rather than bet the whole
-# build on which one actually boots, every bsd.rd found gets patched
-# identically below -- they're the same upstream file, so patching
-# more than the one that boots is harmless.
+# Find bsd.rd (there are two copies -- see header) purely to locate
+# the RELEASE/ARCH sets directory; neither copy is touched otherwise.
 BSDRD_MATCHES=$(find "${WORK}/fs-mnt" -name bsd.rd 2>/dev/null)
 BSDRD_COUNT=$(printf '%s\n' "${BSDRD_MATCHES}" | grep -c .)
 if [ "${BSDRD_COUNT}" -lt 1 ]; then
@@ -175,96 +151,48 @@ if [ -f "${SITEDIR}/install.site" ]; then
 fi
 ( cd "${SITEDIR}" && tar -czphf "${SETDIR}/${SITETGZ}" . )
 
-cp "${REPO_DIR}/install.conf.usb" "${WORK}/auto_install.conf"
-
-# install.sub's patch as a sed script file rather than an inline
-# literal: written once here, flush-left, so there's no risk of the
-# `for` loop's indentation below leaking a stray leading tab onto the
-# line that closes the quoted sed program (which would land as a bogus
-# extra "command" right after the `a\` block's closing `fi`).
-cat > "${WORK}/install_sub.sed" <<'SEDEOF'
-/prep_root_mail \/tmp\/ai\/ai/a\
-echo\
-echo "Autoinstall finished. Remove the installation media, then press ENTER/RETURN to reboot."\
-if command -v pause >/dev/null 2>&1; then\
-	pause\
-else\
-	read _removed\
-fi
-SEDEOF
-
-# Patch every bsd.rd copy found above. Using `set --`/`for` rather than
-# `cmd | while read` deliberately: a pipeline's while-loop runs in a
-# subshell in this shell, where `exit` would only kill the subshell and
-# let the rest of the script carry on past a real failure.
+# Patch every bsd.rd copy found above so the custom site set is
+# pre-selected by default on the installer's set-picker screen -- see
+# build.sh's header for the full explanation of the DEFAULTSETS
+# mechanism. Using `set --`/`for` rather than `cmd | while read`
+# deliberately: a pipeline's while-loop runs in a subshell in this
+# shell, where `exit` would only kill the subshell and let the rest of
+# the script carry on past a real failure.
 set -- $(printf '%s\n' "${BSDRD_MATCHES}")
 for BSDRD; do
-	echo "==> Patching bsd.rd with embedded auto_install.conf: ${BSDRD}"
-	# bsd.rd ships gzip-compressed on the install media (the bootloader
-	# inflates it at boot time); rdsetroot needs the raw ELF underneath.
+	echo "==> Patching install.sub in ${BSDRD}"
 	gzip -dc "${BSDRD}" > "${WORK}/bsd.rd"
 	rdsetroot -x "${WORK}/bsd.rd" "${WORK}/ramdisk.fs"
 	vnconfig vnd2 "${WORK}/ramdisk.fs"
 	mkdir -p "${WORK}/rd-mnt"
 	mount /dev/vnd2a "${WORK}/rd-mnt"
-	cp "${WORK}/auto_install.conf" "${WORK}/rd-mnt/auto_install.conf"
 
-	echo "==> Patching .profile's menu countdown (TIMEOUT_PERIOD_SEC 5 -> 1)"
-	# See build.sh for the full explanation: the real autoinstall
-	# countdown lives in the ramdisk's /.profile, not install.sub.
-	RDPROFILE="${WORK}/rd-mnt/.profile"
-	[ -f "${RDPROFILE}" ] || {
-		echo "build_usb.sh: ${RDPROFILE} not found -- can't patch .profile" >&2
-		exit 1
-	}
-	t_count=$(grep -c '^TIMEOUT_PERIOD_SEC=5$' "${RDPROFILE}")
-	if [ "${t_count}" -ne 1 ]; then
-		echo "build_usb.sh: .profile's 'TIMEOUT_PERIOD_SEC=5' not found exactly once (got ${t_count})." >&2
-		echo "build_usb.sh: this OpenBSD release's .profile has likely changed -- update the sed" >&2
-		echo "build_usb.sh: pattern in build_usb.sh. Aborting rather than silently keeping the 5s wait." >&2
-		exit 1
-	fi
-	sed 's/^TIMEOUT_PERIOD_SEC=5$/TIMEOUT_PERIOD_SEC=1/' "${RDPROFILE}" > "${RDPROFILE}.new"
-	grep -q '^TIMEOUT_PERIOD_SEC=1$' "${RDPROFILE}.new" || {
-		echo "build_usb.sh: .profile patch did not apply as expected -- aborting" >&2
-		rm -f "${RDPROFILE}.new"
-		exit 1
-	}
-	# cat into the existing file rather than `mv`-ing over it -- see the
-	# install.sub patch below for why (confirmed by a real test boot of
-	# build.sh's ISO).
-	cat "${RDPROFILE}.new" > "${RDPROFILE}"
-	rm -f "${RDPROFILE}.new"
-
-	echo "==> Patching install.sub with a media-removal prompt before reboot"
 	RDSUB="${WORK}/rd-mnt/install.sub"
 	[ -f "${RDSUB}" ] || {
 		echo "build_usb.sh: ${RDSUB} not found -- can't patch install.sub" >&2
 		exit 1
 	}
-	a_count=$(grep -c 'prep_root_mail /tmp/ai/ai' "${RDSUB}")
-	if [ "${a_count}" -ne 1 ]; then
-		echo "build_usb.sh: install.sub anchor not found exactly once (got ${a_count})." >&2
+	d_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=' "${RDSUB}")
+	if [ "${d_count}" -ne 2 ]; then
+		echo "build_usb.sh: expected exactly 2 DEFAULTSETS= lines in install.sub, found ${d_count}." >&2
 		echo "build_usb.sh: this OpenBSD release's install.sub wording has likely drifted --" >&2
 		echo "build_usb.sh: update the sed pattern in build_usb.sh to match it. Aborting rather" >&2
-		echo "build_usb.sh: than silently shipping an image without the media-removal prompt." >&2
+		echo "build_usb.sh: than silently shipping without the site set pre-selected." >&2
 		exit 1
 	fi
-
-	sed -f "${WORK}/install_sub.sed" "${RDSUB}" > "${RDSUB}.new"
-
-	grep -q 'Autoinstall finished. Remove the installation media' "${RDSUB}.new" || {
+	sed '/^[[:blank:]]*DEFAULTSETS=/s/\$SETS"$/$SETS site$VERSION.tgz"/' "${RDSUB}" > "${RDSUB}.new"
+	new_count=$(grep -cE '^[[:blank:]]*DEFAULTSETS=.*site\$VERSION\.tgz"$' "${RDSUB}.new")
+	if [ "${new_count}" -ne 2 ]; then
 		echo "build_usb.sh: install.sub patch did not apply as expected -- aborting" >&2
 		rm -f "${RDSUB}.new"
 		exit 1
-	}
+	fi
 	# cat into the existing file, NOT `mv` over it: install.sub needs to
 	# stay executable (/autoinstall, /install, /upgrade are symlinks to
-	# it), and `mv` would swap in a freshly-created file at default umask
-	# permissions (no exec bit), breaking all three with "cannot execute:
-	# Permission denied" at the boot menu -- confirmed by an actual test
-	# boot of build.sh's ISO. cat preserves the original inode (and its
-	# mode/owner), overwriting only its content.
+	# it); `mv` would swap in a freshly-created file at default umask
+	# permissions (no exec bit) -- a real bug caught by an earlier test
+	# boot. cat preserves the original inode (and its mode/owner),
+	# overwriting only its content.
 	cat "${RDSUB}.new" > "${RDSUB}"
 	rm -f "${RDSUB}.new"
 
